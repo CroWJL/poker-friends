@@ -1,0 +1,805 @@
+.pf-app {
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  color: #f8fafc;
+  min-height: 100vh;
+  padding: 20px;
+  background-image: linear-gradient(180deg, rgba(6, 16, 29, 0.86) 0%, rgba(6, 16, 29, 0.9) 100%), url("./assets/poker-table-bg.svg");
+  background-size: cover, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
+}
+
+.pf-app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.pf-brand-block {
+  display: grid;
+  gap: 4px;
+}
+
+.pf-brand-logo {
+  width: min(320px, 48vw);
+  height: auto;
+  border-radius: 8px;
+  border: 1px solid rgba(214, 177, 95, 0.24);
+}
+
+.pf-subtitle {
+  margin: 4px 0 0;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.pf-connection-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.6);
+}
+
+.pf-banner-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.pf-banner-ok {
+  color: #34d399;
+}
+
+.pf-banner-warn {
+  color: #fbbf24;
+}
+
+.pf-banner-neutral {
+  color: #94a3b8;
+}
+
+.pf-lobby-card {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 16px;
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.pf-chip-strip {
+  display: block;
+  width: min(420px, 46vw);
+  max-height: 72px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  margin: -6px 0 12px;
+}
+
+.pf-lobby-toolbar {
+  grid-template-columns: minmax(160px, 0.8fr) minmax(180px, 1fr) auto;
+  align-items: center;
+}
+
+.pf-toolbar-field label {
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-size: 11px;
+}
+
+.pf-field {
+  display: grid;
+  gap: 6px;
+}
+
+.pf-field label {
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.pf-field input {
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.75);
+  color: #f8fafc;
+  padding: 0 10px;
+}
+
+.pf-lobby-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pf-lobby-actions button,
+.pf-debug-toggle,
+.pf-action-btn {
+  height: 36px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 14px;
+  cursor: pointer;
+  color: #f8fafc;
+  background: #2563eb;
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+
+.pf-lobby-actions button:hover,
+.pf-debug-toggle:hover,
+.pf-action-btn:hover {
+  filter: brightness(1.06);
+}
+
+.pf-lobby-actions button:active,
+.pf-debug-toggle:active,
+.pf-action-btn:active {
+  transform: translateY(1px);
+}
+
+.pf-lobby-actions button:disabled,
+.pf-action-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.pf-table-layout {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 2.4fr) minmax(290px, 0.95fr);
+  gap: 16px;
+}
+
+.pf-toast {
+  position: absolute;
+  right: 16px;
+  top: -6px;
+  z-index: 5;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(251, 191, 36, 0.65);
+  background: rgba(120, 53, 15, 0.9);
+  color: #fde68a;
+  font-size: 13px;
+}
+
+.pf-main-column,
+.pf-side-column {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.pf-board-card,
+.pf-action-panel,
+.pf-seat-section {
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+}
+
+.pf-board-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pf-chip {
+  min-width: 110px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(30, 41, 59, 0.7);
+}
+
+.pf-chip span {
+  display: block;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.pf-chip strong {
+  font-size: 14px;
+}
+
+.pf-stage-pill {
+  color: #fde68a;
+  letter-spacing: 0.4px;
+  animation: pfPulse 1.8s ease-in-out infinite;
+}
+
+.pf-board-topline {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.pf-status-strip {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(30, 41, 59, 0.55);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  color: #cbd5e1;
+  font-size: 12px;
+}
+
+.pf-muted-label {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.pf-money,
+.pf-money-sub,
+.pf-inline-value {
+  margin: 4px 0 0;
+  font-weight: 600;
+}
+
+.pf-money {
+  font-size: 22px;
+  color: #fbbf24;
+}
+
+.pf-money-sub {
+  font-size: 18px;
+}
+
+.pf-turn-yes {
+  color: #34d399;
+}
+
+.pf-turn-no {
+  color: #cbd5e1;
+}
+
+.pf-community-area,
+.pf-split-grid {
+  margin-top: 12px;
+}
+
+.pf-section-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #cbd5e1;
+}
+
+.pf-community-cards,
+.pf-seat-cards {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pf-card-face {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 62px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  background: linear-gradient(160deg, #f8fafc 0%, #dbeafe 100%);
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.pf-deal-in {
+  animation: pfDealIn 0.26s ease-out both;
+}
+
+.pf-card-red {
+  color: #b91c1c;
+}
+
+.pf-card-black {
+  color: #0f172a;
+}
+
+.pf-card-hidden {
+  color: #334155;
+  background: #0b1526;
+  padding: 0;
+  overflow: hidden;
+}
+
+.pf-card-back-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pf-empty-text {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.pf-split-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.pf-award-line {
+  margin: 0;
+  color: #e2e8f0;
+  font-size: 13px;
+}
+
+.pf-panel-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.pf-action-panel {
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.pf-action-panel-pending {
+  border-color: rgba(56, 189, 248, 0.8);
+  background: rgba(8, 47, 73, 0.55);
+}
+
+.pf-action-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.pf-action-btn-danger {
+  background: #b91c1c;
+}
+
+.pf-action-btn-check {
+  background: #475569;
+}
+
+.pf-action-btn-call {
+  background: #0284c7;
+}
+
+.pf-action-btn-allin {
+  background: #7c3aed;
+}
+
+.pf-raise-row {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.pf-raise-input {
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.75);
+  color: #f8fafc;
+  padding: 0 10px;
+}
+
+.pf-raise-slider {
+  margin-top: 8px;
+  width: 100%;
+  accent-color: #14b8a6;
+}
+
+.pf-action-btn-raise {
+  background: #0f766e;
+}
+
+.pf-action-hint {
+  margin: 10px 0 0;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.pf-quick-raise-row {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.pf-quick-raise-btn {
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(30, 41, 59, 0.9);
+  color: #cbd5e1;
+  cursor: pointer;
+}
+
+.pf-quick-raise-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.pf-round-table {
+  position: relative;
+  min-height: 700px;
+  padding: 28px 16px 26px;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: radial-gradient(circle at 50% 45%, rgba(8, 145, 178, 0.2) 0%, rgba(3, 15, 28, 0.45) 70%);
+  overflow: visible;
+}
+
+.pf-table-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 180px;
+  text-align: center;
+  border-radius: 999px;
+  padding: 16px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  background: rgba(15, 23, 42, 0.85);
+}
+
+.pf-table-center-label {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.pf-table-center-stage {
+  margin: 4px 0 8px;
+  color: #fde68a;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.pf-table-center-pot {
+  margin: 4px 0 0;
+  color: #fbbf24;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.pf-seat-anchor {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: min(280px, 36vw);
+}
+
+.pf-seat-anchor-opponent {
+  width: min(240px, 29vw);
+}
+
+.pf-seat-anchor-self {
+  width: min(360px, 52vw);
+  z-index: 2;
+}
+
+.pf-seat-card {
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(30, 41, 59, 0.75);
+  backdrop-filter: blur(4px);
+  transition: transform 0.16s ease, border-color 0.16s ease, background-color 0.16s ease;
+}
+
+.pf-seat-card-opponent {
+  padding: 8px;
+}
+
+.pf-seat-card-opponent .pf-seat-line {
+  font-size: 12px;
+}
+
+.pf-seat-card-self {
+  padding: 14px;
+  border-width: 2px;
+}
+
+.pf-seat-active {
+  border-color: rgba(251, 191, 36, 0.8);
+  background: rgba(120, 53, 15, 0.42);
+  transform: translateY(-2px);
+  animation: pfActiveSeat 1.3s ease-in-out infinite;
+}
+
+.pf-seat-self {
+  border-color: rgba(59, 130, 246, 0.9);
+}
+
+.pf-seat-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pf-seat-pos {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.pf-seat-line {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #e2e8f0;
+}
+
+.pf-seat-cards {
+  margin-top: 8px;
+  align-items: center;
+}
+
+.pf-event-feed {
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(15, 23, 42, 0.66);
+}
+
+.pf-event-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+}
+
+.pf-event-list li {
+  color: #cbd5e1;
+  font-size: 12px;
+}
+
+.pf-event-empty {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.pf-error-box {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(153, 27, 27, 0.35);
+  border: 1px solid rgba(248, 113, 113, 0.7);
+  color: #fecaca;
+}
+
+.pf-debug-toggle {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.pf-debug-panel {
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(2, 6, 23, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: #cbd5e1;
+  font-size: 12px;
+}
+
+.pf-settlement-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: rgba(2, 6, 23, 0.72);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.pf-settlement-card {
+  width: min(420px, 92vw);
+  padding: 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  background: rgba(15, 23, 42, 0.96);
+}
+
+.pf-settlement-card h3 {
+  margin: 0;
+  color: #fde68a;
+}
+
+.pf-settlement-subtitle {
+  margin: 6px 0 0;
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.pf-settlement-list {
+  margin: 14px 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.pf-settlement-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(30, 41, 59, 0.6);
+}
+
+.pf-settlement-list strong {
+  color: #fbbf24;
+}
+
+.pf-settlement-close {
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 14px;
+  background: #0f766e;
+  color: #f8fafc;
+  cursor: pointer;
+}
+
+@keyframes pfDealIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes pfPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.75;
+  }
+}
+
+@keyframes pfActiveSeat {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.08);
+  }
+}
+
+@media (max-width: 1024px) {
+  .pf-table-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .pf-lobby-card {
+    grid-template-columns: 1fr;
+  }
+
+  .pf-lobby-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .pf-board-topline {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .pf-toast {
+    position: static;
+    margin-bottom: 8px;
+  }
+
+  .pf-round-table {
+    min-height: auto;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    display: grid;
+    gap: 10px;
+  }
+
+  .pf-table-center {
+    position: static;
+    transform: none;
+    width: auto;
+    border-radius: 12px;
+  }
+
+  .pf-seat-anchor {
+    position: static;
+    width: auto;
+    transform: none;
+  }
+
+  .pf-seat-anchor-opponent,
+  .pf-seat-anchor-self {
+    width: auto;
+  }
+
+  .pf-seat-card {
+    backdrop-filter: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .pf-app {
+    padding: 12px;
+  }
+
+  .pf-brand-logo {
+    width: min(240px, 60vw);
+  }
+
+  .pf-chip-strip {
+    width: 100%;
+    max-height: 56px;
+  }
+
+  .pf-subtitle {
+    font-size: 12px;
+  }
+
+  .pf-board-card,
+  .pf-action-panel,
+  .pf-seat-section,
+  .pf-event-feed {
+    padding: 10px;
+  }
+
+  .pf-chip {
+    min-width: 92px;
+  }
+
+  .pf-community-cards,
+  .pf-seat-cards {
+    gap: 6px;
+  }
+
+  .pf-card-face {
+    width: 36px;
+    height: 52px;
+    font-size: 12px;
+  }
+
+  .pf-seat-anchor {
+    width: auto;
+  }
+
+  .pf-action-grid,
+  .pf-raise-row {
+    grid-template-columns: 1fr;
+  }
+
+  .pf-lobby-actions {
+    width: 100%;
+  }
+
+  .pf-lobby-actions button {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .pf-settlement-card {
+    padding: 14px;
+  }
+}

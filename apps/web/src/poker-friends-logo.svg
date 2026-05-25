@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="260" viewBox="0 0 900 260">
+  <defs>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f4d58a" />
+      <stop offset="100%" stop-color="#c79a3e" />
+    </linearGradient>
+  </defs>
+
+  <rect width="900" height="260" fill="#0b1b2d" />
+  <g transform="translate(68 62)">
+    <path d="M54 8C80 8 98 28 98 52C98 82 70 98 54 122C38 98 10 82 10 52C10 28 28 8 54 8Z" fill="#8b1d2c" />
+    <path d="M200 128C200 95 173 72 142 72C111 72 84 95 84 128C84 149 98 166 118 175L107 198H177L166 175C186 166 200 149 200 128Z" fill="#0f172a" />
+    <circle cx="54" cy="52" r="10" fill="#f8fafc" fill-opacity="0.25" />
+  </g>
+
+  <text x="300" y="120" fill="url(#gold)" font-size="64" font-weight="700" font-family="Segoe UI, Arial, sans-serif">Poker Friends</text>
+  <text x="304" y="165" fill="#9cb6cf" font-size="24" font-family="Segoe UI, Arial, sans-serif">Texas Hold'em with Friends</text>
+</svg>

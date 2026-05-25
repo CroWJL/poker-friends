@@ -1,0 +1,19 @@
+{
+  "name": "poker-friends",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.12.3",
+  "scripts": {
+    "dev:web": "pnpm --filter @poker-friends/web dev",
+    "dev:desktop": "pnpm --filter @poker-friends/desktop dev",
+    "dev:server": "docker compose -f deploy/docker-compose.yml up backend",
+    "acceptance:mvp": "node mvp-acceptance.mjs",
+    "acceptance:beta": "node beta-acceptance.mjs",
+    "build:web": "pnpm --filter @poker-friends/web build",
+    "build:desktop": "pnpm --filter @poker-friends/desktop build",
+    "build:all": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "infra:up": "docker compose -f deploy/docker-compose.yml up -d",
+    "infra:down": "docker compose -f deploy/docker-compose.yml down"
+  }
+}

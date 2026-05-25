@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="240" viewBox="0 0 900 240">
+  <defs>
+    <g id="chip">
+      <circle cx="0" cy="0" r="74" fill="currentColor" />
+      <circle cx="0" cy="0" r="58" fill="none" stroke="#ffffff" stroke-opacity="0.85" stroke-width="7" />
+      <circle cx="0" cy="0" r="33" fill="#ffffff" fill-opacity="0.18" />
+      <rect x="-8" y="-74" width="16" height="18" rx="4" fill="#ffffff" fill-opacity="0.9" />
+      <rect x="-8" y="56" width="16" height="18" rx="4" fill="#ffffff" fill-opacity="0.9" />
+      <rect x="-74" y="-8" width="18" height="16" rx="4" fill="#ffffff" fill-opacity="0.9" />
+      <rect x="56" y="-8" width="18" height="16" rx="4" fill="#ffffff" fill-opacity="0.9" />
+    </g>
+  </defs>
+  <rect width="900" height="240" fill="#071526" />
+  <g transform="translate(130 120)" style="color:#f8fafc"><use href="#chip" /></g>
+  <g transform="translate(330 120)" style="color:#b91c1c"><use href="#chip" /></g>
+  <g transform="translate(530 120)" style="color:#15803d"><use href="#chip" /></g>
+  <g transform="translate(730 120)" style="color:#0f172a"><use href="#chip" /></g>
+</svg>

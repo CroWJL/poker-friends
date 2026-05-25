@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.turbo/
+.idea/
+.vscode/
+.DS_Store
+*.log
+.env
+.env.*
+target/
+.gradle/
+build/
+out/
+apps/desktop/src-tauri/target/
+server/.mvn/
+server/target/
+coverage/

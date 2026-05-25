@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: poker-friends-server
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/poker_friends}
+    username: ${DB_USER:poker}
+    password: ${DB_PASSWORD:poker123}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  data:
+    redis:
+      host: ${REDIS_HOST:demopmredis.liangyihui.net}
+      port: ${REDIS_PORT:6379}
+      database: ${REDIS_DB:10}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+server:
+  port: ${SERVER_PORT:8080}

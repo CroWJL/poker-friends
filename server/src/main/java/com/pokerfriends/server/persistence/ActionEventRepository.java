@@ -1,0 +1,9 @@
+package com.pokerfriends.server.persistence;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface ActionEventRepository extends JpaRepository<ActionEventEntity, Long> {
+  Page<ActionEventEntity> findByTableIdOrderByIdDesc(String tableId, Pageable pageable);
+}
