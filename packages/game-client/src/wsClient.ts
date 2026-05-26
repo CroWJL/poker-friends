@@ -60,13 +60,19 @@ export class PokerWsClient {
     return true;
   }
 
-  onMessage(listener: MessageListener): void {
+  onMessage(listener: MessageListener): () => void {
     this.listeners.push(listener);
+    return () => {
+      this.listeners = this.listeners.filter((candidate) => candidate !== listener);
+    };
   }
 
-  onStatus(listener: ConnectionStatusListener): void {
+  onStatus(listener: ConnectionStatusListener): () => void {
     this.statusListeners.push(listener);
     listener(this.status);
+    return () => {
+      this.statusListeners = this.statusListeners.filter((candidate) => candidate !== listener);
+    };
   }
 
   getStatus(): ConnectionStatus {

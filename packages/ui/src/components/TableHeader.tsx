@@ -1,7 +1,6 @@
 import { PlayingCard } from "./PlayingCard";
 
 interface TableHeaderProps {
-  roomId: string;
   tableId: string;
   tokenReady: boolean;
   currentActionPlayer: string;
@@ -18,7 +17,6 @@ interface TableHeaderProps {
 }
 
 export function TableHeader({
-  roomId,
   tableId,
   tokenReady,
   currentActionPlayer,
@@ -38,10 +36,6 @@ export function TableHeader({
   return (
     <section className="pf-board-card">
       <div className="pf-board-meta">
-        <div className="pf-chip">
-          <span>房间</span>
-          <strong>{roomId || "-"}</strong>
-        </div>
         <div className="pf-chip">
           <span>牌桌</span>
           <strong>{tableId || "-"}</strong>

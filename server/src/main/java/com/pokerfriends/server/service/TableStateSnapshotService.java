@@ -93,6 +93,10 @@ public class TableStateSnapshotService {
       state.setDealerCursor(root.path("dealerCursor").asInt(-1));
       state.setActionsInStage(root.path("actionsInStage").asInt(0));
       state.setPlayersToAct(root.path("playersToAct").asInt(0));
+      state.setStarted(root.path("started").asBoolean(false));
+      state.setDealerPlayerId(asNullableText(root.path("dealerPlayerId")));
+      state.setSmallBlindPlayerId(asNullableText(root.path("smallBlindPlayerId")));
+      state.setBigBlindPlayerId(asNullableText(root.path("bigBlindPlayerId")));
 
       JsonNode communityCards = root.path("communityCards");
       if (communityCards.isArray()) {
@@ -143,7 +147,12 @@ public class TableStateSnapshotService {
       if (potAwards.isArray()) {
         state.setPotAwards(
             asArray(potAwards).stream()
-                .map(node -> new PotAward(node.path("playerId").asText(), node.path("amount").asInt(0)))
+                .map(node -> new PotAward(
+                    node.path("playerId").asText(),
+                    node.path("amount").asInt(0),
+                    asStringList(node.path("bestFiveCards")),
+                    node.path("handType").asText("")
+                ))
                 .toList()
         );
       }
@@ -164,5 +173,13 @@ public class TableStateSnapshotService {
     List<JsonNode> list = new java.util.ArrayList<>();
     node.forEach(list::add);
     return list;
+  }
+
+  private String asNullableText(JsonNode node) {
+    if (node == null || node.isNull()) {
+      return null;
+    }
+    String value = node.asText("");
+    return value.isBlank() ? null : value;
   }
 }

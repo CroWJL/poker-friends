@@ -17,15 +17,25 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TableEngineServiceTest {
 
   @Test
-  void shouldPostBlindWhenSecondPlayerJoins() {
-    TableEngineService service = createHeadsUpTable();
+  void shouldStayWaitingUntilHostStartsGame() {
+    TableEngineService service = createHeadsUpTableWithoutStart();
 
     TableState snapshot = service.getSnapshot("t-1");
     assertEquals(2, snapshot.getPlayers().size());
-    assertEquals(30, snapshot.getPot());
-    assertEquals(20, snapshot.getCurrentBet());
-    assertEquals(10, snapshot.getPlayers().get(0).getBetThisRound());
-    assertEquals(20, snapshot.getPlayers().get(1).getBetThisRound());
+    assertEquals(TableStage.WAITING, snapshot.getStage());
+    assertEquals(0, snapshot.getPot());
+    assertEquals(0, snapshot.getCurrentBet());
+  }
+
+  @Test
+  void shouldRejectStartGameFromNonHost() {
+    TableEngineService service = createHeadsUpTableWithoutStart();
+
+    CompletionException exception = assertThrows(
+        CompletionException.class,
+        () -> service.startGame("t-1", "p-2").join()
+    );
+    assertEquals("仅房主可开始牌局", exception.getCause().getMessage());
   }
 
   @Test
@@ -70,6 +80,18 @@ class TableEngineServiceTest {
     assertEquals(1010, snapshot.getPot());
     assertEquals(1010, snapshot.getCurrentBet());
     assertEquals(0, snapshot.getPlayers().get(0).getStack());
+  }
+
+  @Test
+  void shouldWaitForOpponentActionAfterSinglePlayerAllIn() {
+    TableEngineService service = createHeadsUpTable();
+
+    service.submitAction("t-1", "p-1", new ActionCommand(PlayerActionType.ALL_IN, null)).join();
+    TableState snapshot = service.getSnapshot("t-1");
+
+    assertEquals(TableStage.PREFLOP, snapshot.getStage());
+    assertEquals("p-2", snapshot.getActionPlayerId());
+    assertTrue(snapshot.getPotAwards().isEmpty());
   }
 
   @Test
@@ -148,10 +170,10 @@ class TableEngineServiceTest {
 
     service.submitAction("t-1", "p-1", new ActionCommand(PlayerActionType.FOLD, null)).join();
     TableState snapshot = service.getSnapshot("t-1");
-    assertEquals(TableStage.PREFLOP, snapshot.getStage());
-    assertEquals(30, snapshot.getPot());
-    assertEquals(20, snapshot.getCurrentBet());
-    assertEquals("p-2", snapshot.getActionPlayerId());
+    assertEquals(TableStage.FINISHED, snapshot.getStage());
+    assertEquals(0, snapshot.getPot());
+    assertEquals(0, snapshot.getCurrentBet());
+    assertEquals("p-2", snapshot.getPotAwards().get(0).playerId());
   }
 
   @Test
@@ -192,6 +214,7 @@ class TableEngineServiceTest {
     service.initTable("t-showdown", 10, 20, 6);
     service.addPlayer("t-showdown", "p-1", "Alice");
     service.addPlayer("t-showdown", "p-2", "Bob");
+    service.startGame("t-showdown", "p-1").join();
 
     // 固定牌序下，p-1 手牌为 AH AD，p-2 手牌为 KC KD，公共牌为 2C 3D 4H 5S 7C。
     service.submitAction("t-showdown", "p-1", new ActionCommand(PlayerActionType.ALL_IN, null)).join();
@@ -200,6 +223,8 @@ class TableEngineServiceTest {
     TableState snapshot = service.getSnapshot("t-showdown");
     assertEquals(TableStage.FINISHED, snapshot.getStage());
     assertEquals("p-1", snapshot.getPotAwards().get(0).playerId());
+    assertEquals(5, snapshot.getPotAwards().get(0).bestFiveCards().size());
+    assertTrue(!snapshot.getPotAwards().get(0).handType().isBlank());
     assertEquals(2000, snapshot.getPlayers().stream()
         .filter(player -> "p-1".equals(player.getPlayerId()))
         .findFirst()
@@ -211,13 +236,20 @@ class TableEngineServiceTest {
   void shouldRotateDealerAndBlindsForNextHand() {
     TableEngineService service = createHeadsUpTable();
     TableState firstHand = service.getSnapshot("t-1");
+    assertEquals("p-1", firstHand.getDealerPlayerId());
+    assertEquals("p-1", firstHand.getSmallBlindPlayerId());
+    assertEquals("p-2", firstHand.getBigBlindPlayerId());
     assertEquals(10, firstHand.getPlayers().get(0).getBetThisRound());
     assertEquals(20, firstHand.getPlayers().get(1).getBetThisRound());
 
     service.submitAction("t-1", "p-1", new ActionCommand(PlayerActionType.FOLD, null)).join();
+    service.startGame("t-1", "p-1").join();
     TableState secondHand = service.getSnapshot("t-1");
 
     assertEquals(TableStage.PREFLOP, secondHand.getStage());
+    assertEquals("p-2", secondHand.getDealerPlayerId());
+    assertEquals("p-2", secondHand.getSmallBlindPlayerId());
+    assertEquals("p-1", secondHand.getBigBlindPlayerId());
     assertEquals(20, secondHand.getPlayers().get(0).getBetThisRound());
     assertEquals(10, secondHand.getPlayers().get(1).getBetThisRound());
     assertEquals("p-2", secondHand.getActionPlayerId());
@@ -236,6 +268,7 @@ class TableEngineServiceTest {
         .isWaitingForNextHand());
 
     service.submitAction("t-1", "p-1", new ActionCommand(PlayerActionType.FOLD, null)).join();
+    service.startGame("t-1", "p-1").join();
     TableState nextHand = service.getSnapshot("t-1");
     assertEquals(TableStage.PREFLOP, nextHand.getStage());
     assertTrue(nextHand.getPlayers().stream()
@@ -247,6 +280,12 @@ class TableEngineServiceTest {
   }
 
   private TableEngineService createHeadsUpTable() {
+    TableEngineService service = createHeadsUpTableWithoutStart();
+    service.startGame("t-1", "p-1").join();
+    return service;
+  }
+
+  private TableEngineService createHeadsUpTableWithoutStart() {
     TableEngineService service = new TableEngineService();
     service.initTable("t-1", 10, 20, 6);
     service.addPlayer("t-1", "p-1", "Alice");
@@ -264,6 +303,7 @@ class TableEngineServiceTest {
     service.addPlayer(tableId, "p-1", "Alice");
     service.addPlayer(tableId, "p-2", "Bob");
     service.addPlayer(tableId, "p-3", "Carol");
+    service.startGame(tableId, "p-1").join();
     return service;
   }
 

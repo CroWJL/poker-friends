@@ -25,7 +25,7 @@ export interface ActionCommand {
 }
 
 export interface WsClientMessage {
-  event: "ACTION" | "PING";
+  event: "ACTION" | "PING" | "START_GAME";
   payload?: ActionCommand;
 }
 
@@ -49,17 +49,21 @@ export interface SidePotView {
 export interface TableSnapshot {
   tableId: string;
   handId: string;
-  stage: "PREFLOP" | "FLOP" | "TURN" | "RIVER" | "SHOWDOWN" | "FINISHED";
+  stage: "WAITING" | "PREFLOP" | "FLOP" | "TURN" | "RIVER" | "SHOWDOWN" | "FINISHED";
+  started: boolean;
   pot: number;
   currentBet: number;
   actionPlayerId?: string;
+  dealerPlayerId?: string;
+  smallBlindPlayerId?: string;
+  bigBlindPlayerId?: string;
   communityCards: string[];
   sidePots?: SidePotView[];
-  potAwards?: Array<{ playerId: string; amount: number }>;
+  potAwards?: Array<{ playerId: string; amount: number; bestFiveCards?: string[]; handType?: string }>;
   players: PlayerView[];
 }
 
 export interface WsServerMessage {
-  event: "TABLE_SNAPSHOT" | "ACTION_RESULT" | "ERROR" | "PONG";
+  event: "TABLE_SNAPSHOT" | "ACTION_RESULT" | "ACTION_EVENT" | "ERROR" | "PONG";
   payload: unknown;
 }

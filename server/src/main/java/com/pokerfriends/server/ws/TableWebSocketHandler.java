@@ -22,9 +22,14 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 @Component
 public class TableWebSocketHandler extends TextWebSocketHandler {
@@ -36,6 +41,7 @@ public class TableWebSocketHandler extends TextWebSocketHandler {
   private final TableStateSnapshotService tableStateSnapshotService;
   private final ActionEventLogService actionEventLogService;
   private final Map<String, Map<String, WebSocketSession>> tableSessions = new ConcurrentHashMap<>();
+  private final ScheduledExecutorService settlementScheduler = Executors.newSingleThreadScheduledExecutor();
 
   public TableWebSocketHandler(
       ObjectMapper objectMapper,
@@ -77,6 +83,7 @@ public class TableWebSocketHandler extends TextWebSocketHandler {
       tableStateSnapshotService.upsert(snapshotState);
       sendSnapshotToSession(session, snapshotState);
       broadcastTableSnapshot(tableId, snapshotState, session);
+      scheduleAutoStartIfNeeded(tableId, snapshotState);
     } catch (Exception ex) {
       session.sendMessage(json(new WsEnvelope("ERROR", Map.of("message", ex.getMessage()))));
       session.close(CloseStatus.SERVER_ERROR);
@@ -94,6 +101,19 @@ public class TableWebSocketHandler extends TextWebSocketHandler {
       return;
     }
 
+    if ("START_GAME".equals(envelope.event())) {
+      try {
+        TableState snapshot = tableEngineService.startGame(tableId, playerId).join();
+        tableStateMetaService.upsert(snapshot);
+        tableStateSnapshotService.upsert(snapshot);
+        broadcastTableSnapshot(tableId, snapshot, null);
+        scheduleAutoStartIfNeeded(tableId, snapshot);
+      } catch (Exception ex) {
+        session.sendMessage(json(new WsEnvelope("ERROR", Map.of("message", rootMessage(ex)))));
+      }
+      return;
+    }
+
     if (!"ACTION".equals(envelope.event())) {
       session.sendMessage(json(new WsEnvelope("ERROR", Map.of("message", "未知事件类型"))));
       return;
@@ -105,7 +125,20 @@ public class TableWebSocketHandler extends TextWebSocketHandler {
         tableStateMetaService.upsert(snapshot);
         tableStateSnapshotService.upsert(snapshot);
         actionEventLogService.recordAccepted(tableId, playerId, command, snapshot);
+        String actorName = snapshot.getPlayers().stream()
+            .filter(player -> player.getPlayerId().equals(playerId))
+            .map(PlayerState::getPlayerName)
+            .findFirst()
+            .orElse(playerId);
+        Map<String, Object> actionPayload = new HashMap<>();
+        actionPayload.put("eventId", UUID.randomUUID().toString());
+        actionPayload.put("playerId", playerId);
+        actionPayload.put("playerName", actorName);
+        actionPayload.put("actionType", command.type().name());
+        actionPayload.put("amount", command.amount());
+        broadcastEnvelope(tableId, new WsEnvelope("ACTION_EVENT", actionPayload));
         broadcastTableSnapshot(tableId, snapshot, null);
+        scheduleAutoStartIfNeeded(tableId, snapshot);
       }).join();
       session.sendMessage(json(new WsEnvelope("ACTION_RESULT", Map.of("accepted", true))));
     } catch (Exception ex) {
@@ -119,9 +152,9 @@ public class TableWebSocketHandler extends TextWebSocketHandler {
           playerId,
           rejected,
           safeCurrentStage(tableId),
-          ex.getMessage()
+          rootMessage(ex)
       );
-      session.sendMessage(json(new WsEnvelope("ERROR", Map.of("message", ex.getMessage()))));
+      session.sendMessage(json(new WsEnvelope("ERROR", Map.of("message", rootMessage(ex)))));
     }
   }
 
@@ -153,6 +186,21 @@ public class TableWebSocketHandler extends TextWebSocketHandler {
     });
   }
 
+  private void broadcastEnvelope(String tableId, WsEnvelope envelope) {
+    Map<String, WebSocketSession> sessions = tableSessions.get(tableId);
+    if (sessions == null) {
+      return;
+    }
+    sessions.values().forEach(session -> {
+      try {
+        if (session.isOpen()) {
+          session.sendMessage(json(envelope));
+        }
+      } catch (Exception ignored) {
+      }
+    });
+  }
+
   private void sendSnapshotToSession(WebSocketSession session, TableState fullSnapshot) throws Exception {
     String viewerPlayerId = (String) session.getAttributes().get("playerId");
     TableState masked = maskSnapshotForViewer(fullSnapshot, viewerPlayerId);
@@ -169,13 +217,17 @@ public class TableWebSocketHandler extends TextWebSocketHandler {
     masked.setDealerCursor(fullSnapshot.getDealerCursor());
     masked.setActionsInStage(fullSnapshot.getActionsInStage());
     masked.setPlayersToAct(fullSnapshot.getPlayersToAct());
+    masked.setStarted(fullSnapshot.isStarted());
+    masked.setDealerPlayerId(fullSnapshot.getDealerPlayerId());
+    masked.setSmallBlindPlayerId(fullSnapshot.getSmallBlindPlayerId());
+    masked.setBigBlindPlayerId(fullSnapshot.getBigBlindPlayerId());
     masked.getCommunityCards().clear();
     masked.getCommunityCards().addAll(fullSnapshot.getCommunityCards());
     masked.setSidePots(fullSnapshot.getSidePots().stream()
         .map(sidePot -> new SidePot(sidePot.amount(), List.copyOf(sidePot.eligiblePlayerIds())))
         .toList());
     masked.setPotAwards(fullSnapshot.getPotAwards().stream()
-        .map(award -> new PotAward(award.playerId(), award.amount()))
+        .map(award -> new PotAward(award.playerId(), award.amount(), List.copyOf(award.bestFiveCards()), award.handType()))
         .toList());
     masked.setRemainingDeck(List.of());
     masked.getPlayers().clear();
@@ -233,5 +285,40 @@ public class TableWebSocketHandler extends TextWebSocketHandler {
     } catch (Exception ignored) {
       return "UNKNOWN";
     }
+  }
+
+  private String rootMessage(Throwable throwable) {
+    Throwable current = throwable;
+    while (current.getCause() != null) {
+      current = current.getCause();
+    }
+    return current.getMessage() == null ? "未知错误" : current.getMessage();
+  }
+
+  private void scheduleAutoStartIfNeeded(String tableId, TableState snapshot) {
+    if (snapshot.getStage() != TableStage.FINISHED || !snapshot.isStarted()) {
+      return;
+    }
+    settlementScheduler.schedule(() -> {
+      try {
+        TableState current = tableEngineService.getSnapshot(tableId);
+        if (current.getStage() != TableStage.FINISHED || !current.isStarted()) {
+          return;
+        }
+        String hostPlayerId = current.getPlayers().stream()
+            .filter(player -> player.getSeat() == 1)
+            .map(PlayerState::getPlayerId)
+            .findFirst()
+            .orElse(null);
+        if (hostPlayerId == null) {
+          return;
+        }
+        TableState next = tableEngineService.startGame(tableId, hostPlayerId).join();
+        tableStateMetaService.upsert(next);
+        tableStateSnapshotService.upsert(next);
+        broadcastTableSnapshot(tableId, next, null);
+      } catch (Exception ignored) {
+      }
+    }, 3, TimeUnit.SECONDS);
   }
 }

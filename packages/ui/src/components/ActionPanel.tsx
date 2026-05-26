@@ -6,10 +6,20 @@ interface ActionPanelProps {
   actionPending: boolean;
   stack: number;
   betThisRound: number;
+  disabled?: boolean;
+  disabledReason?: string;
   onSendAction: (action: ActionCommand) => void;
 }
 
-export function ActionPanel({ legalActions, actionPending, stack, betThisRound, onSendAction }: ActionPanelProps) {
+export function ActionPanel({
+  legalActions,
+  actionPending,
+  stack,
+  betThisRound,
+  disabled = false,
+  disabledReason,
+  onSendAction
+}: ActionPanelProps) {
   const [raiseTo, setRaiseTo] = useState(20);
   const minRaiseTo = legalActions.minRaiseTo || 20;
   const maxRaiseTo = Math.max(minRaiseTo, betThisRound + stack);
@@ -21,7 +31,7 @@ export function ActionPanel({ legalActions, actionPending, stack, betThisRound, 
     const base = minRaiseTo;
     return [base, Math.min(maxRaiseTo, base * 2), Math.min(maxRaiseTo, base * 3)];
   }, [minRaiseTo, maxRaiseTo]);
-  const disabledAll = actionPending;
+  const disabledAll = actionPending || disabled;
 
   return (
     <section className={`pf-action-panel ${actionPending ? "pf-action-panel-pending" : ""}`}>
@@ -83,6 +93,7 @@ export function ActionPanel({ legalActions, actionPending, stack, betThisRound, 
       <p className="pf-action-hint">
         最小加注到：{minRaiseTo} · 最大加注到：{maxRaiseTo}
         {actionPending ? " · 动作提交中..." : ""}
+        {!actionPending && disabled && disabledReason ? ` · ${disabledReason}` : ""}
       </p>
     </section>
   );

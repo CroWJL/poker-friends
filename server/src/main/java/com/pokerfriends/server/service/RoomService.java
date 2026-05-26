@@ -68,7 +68,11 @@ public class RoomService {
         refreshRoomStatus(room);
         return new RoomResponse(roomId, tableId, playerId, authTokenService.issueToken(tableId, playerId));
       } catch (DataIntegrityViolationException duplicate) {
-        // roomId/tableId 唯一索引冲突，重试生成新的房间号。
+        if (isRoomIdentityConflict(duplicate)) {
+          // roomId/tableId 唯一索引冲突，重试生成新的房间号。
+          continue;
+        }
+        throw duplicate;
       }
     }
     throw new IllegalStateException("无法生成唯一房间号");
@@ -143,5 +147,17 @@ public class RoomService {
 
   private String nextPlayerId() {
     return "p-" + playerCounter.getAndIncrement();
+  }
+
+  private boolean isRoomIdentityConflict(DataIntegrityViolationException exception) {
+    Throwable root = exception;
+    while (root.getCause() != null) {
+      root = root.getCause();
+    }
+    String message = root.getMessage();
+    if (message == null) {
+      return false;
+    }
+    return message.contains("rooms_room_id_key") || message.contains("rooms_table_id_key");
   }
 }

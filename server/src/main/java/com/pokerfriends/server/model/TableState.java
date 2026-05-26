@@ -13,6 +13,10 @@ public class TableState {
   private int dealerCursor;
   private int actionsInStage;
   private int playersToAct;
+  private boolean started;
+  private String dealerPlayerId;
+  private String smallBlindPlayerId;
+  private String bigBlindPlayerId;
   private final List<String> communityCards;
   private final List<String> remainingDeck;
   private final List<SidePot> sidePots;
@@ -22,13 +26,17 @@ public class TableState {
   public TableState(String tableId) {
     this.tableId = tableId;
     this.handId = "h-001";
-    this.stage = TableStage.PREFLOP;
+    this.stage = TableStage.WAITING;
     this.pot = 0;
     this.currentBet = 0;
     this.actionCursor = 0;
     this.dealerCursor = -1;
     this.actionsInStage = 0;
     this.playersToAct = 0;
+    this.started = false;
+    this.dealerPlayerId = null;
+    this.smallBlindPlayerId = null;
+    this.bigBlindPlayerId = null;
     this.communityCards = new ArrayList<>();
     this.remainingDeck = new ArrayList<>();
     this.sidePots = new ArrayList<>();
@@ -102,6 +110,38 @@ public class TableState {
 
   public void setPlayersToAct(int playersToAct) {
     this.playersToAct = playersToAct;
+  }
+
+  public boolean isStarted() {
+    return started;
+  }
+
+  public void setStarted(boolean started) {
+    this.started = started;
+  }
+
+  public String getDealerPlayerId() {
+    return dealerPlayerId;
+  }
+
+  public void setDealerPlayerId(String dealerPlayerId) {
+    this.dealerPlayerId = dealerPlayerId;
+  }
+
+  public String getSmallBlindPlayerId() {
+    return smallBlindPlayerId;
+  }
+
+  public void setSmallBlindPlayerId(String smallBlindPlayerId) {
+    this.smallBlindPlayerId = smallBlindPlayerId;
+  }
+
+  public String getBigBlindPlayerId() {
+    return bigBlindPlayerId;
+  }
+
+  public void setBigBlindPlayerId(String bigBlindPlayerId) {
+    this.bigBlindPlayerId = bigBlindPlayerId;
   }
 
   public List<String> getCommunityCards() {
