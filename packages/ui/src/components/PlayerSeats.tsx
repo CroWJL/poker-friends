@@ -116,7 +116,7 @@ export function PlayerSeats({
   const opponents =
     selfSeat == null
       ? orderedPlayers.filter((player) => player.playerId !== selfPlayer?.playerId)
-      : orderedPlayers.filter((player) => player.playerId !== selfPlayer.playerId).sort((left, right) => seatDistance(left.seat) - seatDistance(right.seat));
+      : orderedPlayers.filter((player) => player.seat !== selfSeat).sort((left, right) => seatDistance(left.seat) - seatDistance(right.seat));
   const opponentPositions = getOpponentLayout(opponents.length);
   const centerCards = Array.from({ length: 5 }, (_, index) => communityCards[index] ?? "??");
   const getRoleTags = (playerId: string) => {
