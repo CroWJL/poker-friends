@@ -10,7 +10,6 @@
 - `packages/platform`：Web/Tauri 平台适配层
 - `packages/ui`：共享 UI 组件
 - `server`：Spring Boot 云后端（HTTP + WebSocket + 规则引擎）
-- `docs/protocol.md`：HTTP 与 WS 协议定义
 - `deploy`：Docker Compose、Nginx 反代、备份脚本
 
 ## 关键设计
@@ -48,18 +47,6 @@ docker compose -f deploy/docker-compose.yml up -d
 - 房间创建：`POST /api/rooms`
 - 加入房间：`POST /api/rooms/{roomId}/join`
 - 实时通道：`/ws/table/{tableId}?playerId={playerId}&token={token}`
-
-详见：`docs/protocol.md`
-
-## MVP 验收
-
-- 自动化验收：`pnpm acceptance:mvp`
-- 验收标准与手动步骤：`docs/mvp-acceptance.md`
-
-## Beta 验收与一致性
-
-- Beta 自动化验收：`pnpm acceptance:beta`
-- 数据一致性与重启策略：`docs/beta-data-consistency.md`
 
 ## 部署与备份
 
