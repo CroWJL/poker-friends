@@ -1090,7 +1090,46 @@
   }
 }
 
-@media (max-width: 1024px) {
+@media (hover: hover) and (pointer: fine) {
+  .pf-app {
+    min-width: 1580px;
+    overflow-x: hidden;
+  }
+
+  .pf-table-layout {
+    min-width: 1540px;
+  }
+
+  .pf-brand-logo {
+    width: 320px;
+  }
+
+  .pf-table-oval-ring {
+    width: 1080px;
+  }
+
+  .pf-table-oval-felt {
+    width: 1000px;
+  }
+
+  .pf-seat-anchor {
+    width: 280px;
+  }
+
+  .pf-seat-anchor-opponent {
+    width: 210px;
+  }
+
+  .pf-seat-anchor-side {
+    width: 132px;
+  }
+
+  .pf-seat-anchor-self {
+    width: 320px;
+  }
+}
+
+@media (max-width: 1024px) and (hover: none) and (pointer: coarse) {
   .pf-table-layout {
     grid-template-columns: 1fr;
   }
@@ -1185,7 +1224,7 @@
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 768px) and (hover: none) and (pointer: coarse) {
   .pf-app {
     padding: 12px;
   }
