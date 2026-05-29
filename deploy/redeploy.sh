@@ -22,7 +22,7 @@ echo "[redeploy] building web assets..."
 pnpm build:web
 
 echo "[redeploy] restarting containers..."
-docker compose -f deploy/docker-compose.yml up -d --build
+DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker compose -f deploy/docker-compose.yml up -d --build
 
 echo "[redeploy] service status:"
 docker compose -f deploy/docker-compose.yml ps
