@@ -10,6 +10,10 @@ echo "[redeploy] branch: ${BRANCH}"
 
 cd "${REPO_ROOT}"
 
+echo "[redeploy] cleaning accidental tsc outputs in src..."
+git checkout -- apps/web/src/main.js 2>/dev/null || true
+rm -f apps/web/src/main.js apps/web/src/resolveApiBaseUrl.js
+
 echo "[redeploy] fetching latest code..."
 git fetch origin
 git checkout "${BRANCH}"

@@ -1,5 +1,7 @@
 node_modules/
 dist/
+apps/web/src/main.js
+apps/web/src/resolveApiBaseUrl.js
 .turbo/
 .idea/
 .vscode/
