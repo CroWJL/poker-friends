@@ -210,7 +210,7 @@ class TableEngineServiceTest {
         "6C", "7D", "8H", "9S", "TC", "JD", "QH", "KS",
         "7C", "5S", "4H", "3D", "2C", "KD", "KC", "AD", "AH"
     ));
-    TableEngineService service = new TableEngineService(fixedDeckService, new HandEvaluatorService());
+    TableEngineService service = new TableEngineService(fixedDeckService, new HandEvaluatorService(), new BotNameService());
     service.initTable("t-showdown", 10, 20, 6);
     service.addPlayer("t-showdown", "p-1", "Alice");
     service.addPlayer("t-showdown", "p-2", "Bob");
