@@ -428,8 +428,12 @@ export function PokerApp({ platform, config }: PokerAppProps) {
       setError("牌桌状态未就绪");
       return;
     }
-    if (snapshot.stage !== "WAITING") {
-      setError("牌局已开始");
+    if (snapshot.stage !== "WAITING" && snapshot.stage !== "FINISHED") {
+      setError("牌局进行中，请稍候");
+      return;
+    }
+    if (snapshot.practiceOutcome) {
+      setError("请先确认练习结果");
       return;
     }
     const self = snapshot.players.find((player) => player.playerId === selfPlayerId);
