@@ -17,7 +17,7 @@ import { PracticeResultOverlay } from "./components/PracticeResultOverlay";
 import { LandscapeRotatePrompt } from "./components/LandscapeRotatePrompt";
 import { SettlementOverlay } from "./components/SettlementOverlay";
 import { UserProfilePanel, type WalletTransactionView } from "./components/UserProfilePanel";
-import { useIsMobileLayout, useIsPortrait, useLandscapeLock, useVisualViewportHeight } from "./hooks/useMediaQuery";
+import { useIsMobileLayout, useIsPortrait, useLandscapeLock } from "./hooks/useMediaQuery";
 import "./poker-theme.css";
 
 interface PokerAppProps {
@@ -673,13 +673,16 @@ export function PokerApp({ platform, config }: PokerAppProps) {
   const canStartPractice = playerName.trim().length > 0;
   const isMobileLayout = useIsMobileLayout();
   const isPortrait = useIsPortrait();
+  const isWeChatBrowser = useMemo(
+    () => typeof navigator !== "undefined" && /MicroMessenger/i.test(navigator.userAgent),
+    []
+  );
   useLandscapeLock(hasActiveSession && isMobileLayout);
-  useVisualViewportHeight(hasActiveSession && isMobileLayout);
 
   return (
     <main
       className={`pf-app ${isMobileLayout ? "pf-app-mobile" : ""} ${
-        isMobileLayout && hasActiveSession ? "pf-app-mobile-session" : ""
+        isMobileLayout && isWeChatBrowser ? "pf-app-wechat" : ""
       }`}
     >
       {isMobileLayout && hasActiveSession && isPortrait ? <LandscapeRotatePrompt /> : null}
