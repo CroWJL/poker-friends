@@ -60,3 +60,29 @@ export function useLandscapeLock(active: boolean): void {
     };
   }, [active]);
 }
+
+/** 微信等内置浏览器工具栏会改变可视高度，用 visualViewport 同步真实可用高度。 */
+export function useVisualViewportHeight(active: boolean): void {
+  useEffect(() => {
+    if (!active || typeof window === "undefined") {
+      document.documentElement.style.removeProperty("--pf-vvh");
+      return;
+    }
+    const update = () => {
+      const height = window.visualViewport?.height ?? window.innerHeight;
+      document.documentElement.style.setProperty("--pf-vvh", `${Math.round(height)}px`);
+    };
+    update();
+    window.visualViewport?.addEventListener("resize", update);
+    window.visualViewport?.addEventListener("scroll", update);
+    window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
+    return () => {
+      window.visualViewport?.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+      window.removeEventListener("orientationchange", update);
+      document.documentElement.style.removeProperty("--pf-vvh");
+    };
+  }, [active]);
+}

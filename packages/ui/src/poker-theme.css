@@ -1566,6 +1566,21 @@
   padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
 }
 
+.pf-app-mobile.pf-app-mobile-session {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  height: var(--pf-vvh, 100dvh);
+  max-height: var(--pf-vvh, 100dvh);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pf-app-mobile.pf-app-mobile-session .pf-app-header {
+  flex-shrink: 0;
+  margin-bottom: 4px;
+}
+
 .pf-app-mobile .pf-app-header {
   margin-bottom: 6px;
   flex-direction: row;
@@ -1601,8 +1616,14 @@
   grid-template-columns: minmax(0, 1fr) minmax(172px, 0.48fr);
   gap: 8px;
   min-width: 0;
-  height: calc(100dvh - 48px);
+  flex: 1;
+  min-height: 0;
+  height: auto;
   align-items: stretch;
+}
+
+.pf-app-mobile.pf-app-mobile-session .pf-table-layout-mobile {
+  overflow: hidden;
 }
 
 .pf-app-mobile .pf-table-layout-mobile .pf-toast {
@@ -1634,8 +1655,8 @@
 
 .pf-app-mobile .pf-mobile-table-board {
   display: grid;
-  grid-template-rows: auto auto 1fr auto;
-  gap: 8px;
+  grid-template-rows: auto auto minmax(68px, auto) auto;
+  gap: 6px;
   height: 100%;
   min-height: 0;
 }
@@ -1672,6 +1693,9 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 5px;
+  flex-shrink: 0;
+  max-height: 42%;
+  overflow-y: auto;
 }
 
 .pf-app-mobile .pf-mobile-opponent-chip {
@@ -1729,8 +1753,10 @@
 .pf-app-mobile .pf-mobile-table-center {
   display: grid;
   place-items: center;
-  min-height: 0;
-  padding: 10px 8px;
+  flex-shrink: 0;
+  min-height: 68px;
+  min-width: 0;
+  padding: 8px;
   border-radius: 12px;
   border: 1px solid rgba(52, 71, 103, 0.45);
   background: radial-gradient(circle at 50% 45%, rgba(19, 145, 95, 0.35) 0%, rgba(4, 12, 28, 0.72) 72%);
@@ -1738,14 +1764,17 @@
 
 .pf-app-mobile .pf-mobile-community-cards {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: center;
+  align-items: center;
   gap: 5px;
+  flex-shrink: 0;
 }
 
 .pf-app-mobile .pf-mobile-community-cards .pf-card-face {
   width: 38px;
   height: 54px;
+  flex-shrink: 0;
 }
 
 .pf-app-mobile .pf-mobile-community-cards .pf-card-center-suit {
@@ -1757,6 +1786,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  flex-shrink: 0;
   padding: 8px 10px;
   border-radius: 10px;
   border: 1px solid rgba(59, 130, 246, 0.65);
@@ -1978,6 +2008,31 @@
 
 .pf-app-mobile .pf-practice-result-btn {
   height: 36px;
+}
+
+@media (max-height: 380px) {
+  .pf-app-mobile .pf-mobile-opponents-grid {
+    gap: 3px;
+    max-height: 36%;
+  }
+
+  .pf-app-mobile .pf-mobile-opponent-chip {
+    padding: 3px 4px;
+  }
+
+  .pf-app-mobile .pf-mobile-table-center {
+    min-height: 60px;
+    padding: 6px;
+  }
+
+  .pf-app-mobile .pf-mobile-community-cards .pf-card-face {
+    width: 34px;
+    height: 48px;
+  }
+
+  .pf-app-mobile .pf-mobile-community-cards .pf-card-center-suit {
+    font-size: 22px;
+  }
 }
 
 @media (max-width: 640px) {
