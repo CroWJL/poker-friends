@@ -24,6 +24,9 @@ public class UserEntity {
   @Column(nullable = false, unique = true, length = 64)
   private String displayName;
 
+  @Column(nullable = false, columnDefinition = "integer not null default 5000")
+  private int walletBalance = 5000;
+
   @Column(nullable = false)
   private OffsetDateTime createdAt;
 
@@ -36,6 +39,7 @@ public class UserEntity {
   public UserEntity(String userId, String displayName) {
     this.userId = userId;
     this.displayName = displayName;
+    this.walletBalance = 5000;
   }
 
   @PrePersist
@@ -56,5 +60,13 @@ public class UserEntity {
 
   public String getDisplayName() {
     return displayName;
+  }
+
+  public int getWalletBalance() {
+    return walletBalance;
+  }
+
+  public void setWalletBalance(int walletBalance) {
+    this.walletBalance = walletBalance;
   }
 }

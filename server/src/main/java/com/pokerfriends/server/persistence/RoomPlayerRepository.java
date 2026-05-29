@@ -6,4 +6,6 @@ import java.util.Optional;
 
 public interface RoomPlayerRepository extends JpaRepository<RoomPlayerEntity, Long> {
   Optional<RoomPlayerEntity> findByRoomIdAndUserId(String roomId, String userId);
+
+  Optional<RoomPlayerEntity> findByRoomIdAndPlayerId(String roomId, String playerId);
 }

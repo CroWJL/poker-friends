@@ -30,8 +30,10 @@ export function SettlementOverlay({
   return (
     <div className="pf-settlement-mask" role="dialog" aria-modal="true">
       <div className="pf-settlement-card">
-        <h3>本局结算</h3>
-        <p className="pf-settlement-subtitle">{subtitle}</p>
+        <div className="pf-settlement-header">
+          <h3>本局结算</h3>
+          <p className="pf-settlement-subtitle">{subtitle}</p>
+        </div>
         <ul className="pf-settlement-list">
           {awards.map((award) => (
             <li key={`${award.playerId}-${award.amount}`}>
@@ -51,9 +53,11 @@ export function SettlementOverlay({
           ))}
         </ul>
         {requireConfirm ? (
-          <button type="button" className="pf-settlement-confirm-btn" onClick={onConfirm}>
-            确认
-          </button>
+          <div className="pf-settlement-footer">
+            <button type="button" className="pf-settlement-confirm-btn" onClick={onConfirm}>
+              确认
+            </button>
+          </div>
         ) : null}
       </div>
     </div>

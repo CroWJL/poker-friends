@@ -17,6 +17,39 @@ export interface RoomResponse {
   tableId: string;
   playerId: string;
   token: string;
+  walletBalance: number;
+}
+
+export interface WalletResponse {
+  displayName: string;
+  walletBalance: number;
+}
+
+export interface UserProfileResponse {
+  userId: string;
+  displayName: string;
+  walletBalance: number;
+}
+
+export type WalletTransactionType = "TABLE_BUY_IN" | "AUTO_REBUY" | "TABLE_CASH_OUT";
+
+export interface WalletTransactionResponse {
+  id: number;
+  type: WalletTransactionType;
+  amount: number;
+  balanceAfter: number;
+  roomId?: string | null;
+  tableId?: string | null;
+  playerId?: string | null;
+  createdAt: string;
+}
+
+export interface LeaveRoomRequest {
+  playerName: string;
+}
+
+export interface LeaveRoomResponse {
+  walletBalance: number;
 }
 
 export interface ActionCommand {

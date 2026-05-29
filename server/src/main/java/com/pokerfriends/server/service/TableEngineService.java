@@ -32,20 +32,23 @@ public class TableEngineService {
   private final DeckService deckService;
   private final HandEvaluatorService handEvaluatorService;
   private final BotNameService botNameService;
+  private final WalletService walletService;
 
   TableEngineService() {
-    this(new DeckService(), new HandEvaluatorService(), new BotNameService());
+    this(new DeckService(), new HandEvaluatorService(), new BotNameService(), null);
   }
 
   @Autowired
   public TableEngineService(
       DeckService deckService,
       HandEvaluatorService handEvaluatorService,
-      BotNameService botNameService
+      BotNameService botNameService,
+      WalletService walletService
   ) {
     this.deckService = deckService;
     this.handEvaluatorService = handEvaluatorService;
     this.botNameService = botNameService;
+    this.walletService = walletService;
   }
 
   public void initTable(String tableId, int smallBlind, int bigBlind, int maxPlayers) {
@@ -78,7 +81,7 @@ public class TableEngineService {
   }
 
   public void addPlayer(String tableId, String playerId, String playerName) {
-    addPlayer(tableId, playerId, playerName, 1000);
+    addPlayer(tableId, playerId, playerName, WalletService.TABLE_BUY_IN);
   }
 
   public void addPlayer(String tableId, String playerId, String playerName, int initialStack) {
@@ -123,6 +126,10 @@ public class TableEngineService {
     return getActor(tableId).copyState();
   }
 
+  public int leavePlayer(String tableId, String playerId, String userId) {
+    return getActor(tableId).run(() -> getActor(tableId).leavePlayerAndCashOut(playerId, userId)).join();
+  }
+
   private TableActor getActor(String tableId) {
     TableActor actor = tables.get(tableId);
     if (actor == null) {
@@ -131,7 +138,7 @@ public class TableEngineService {
     return actor;
   }
 
-  private static final class TableActor {
+  private final class TableActor {
     private final ExecutorService executor;
     private final TableState state;
     private final int smallBlind;
@@ -203,6 +210,9 @@ public class TableEngineService {
       joinedPlayer.setInHand(!waiting);
       state.getPlayers().add(joinedPlayer);
       state.getPlayers().sort(Comparator.comparingInt(PlayerState::getSeat));
+      if (state.isStarted() && state.getStage() == TableStage.WAITING) {
+        autoRebuyPlayersWithZeroStack();
+      }
       if (state.isStarted() && state.getStage() == TableStage.WAITING && countPlayersWithChips() >= 2) {
         startHandWithRotatingBlinds();
       } else if (!state.isStarted() || state.getStage() == TableStage.WAITING) {
@@ -221,6 +231,7 @@ public class TableEngineService {
       if (state.isPracticeMode() && state.getPracticeOutcome() != null && !state.getPracticeOutcome().isBlank()) {
         throw new IllegalStateException("请先确认练习结果");
       }
+      autoRebuyPlayersWithZeroStack();
       if (countPlayersWithChips() < 2) {
         throw new IllegalStateException("人数不足 2 人，无法开始");
       }
@@ -231,6 +242,7 @@ public class TableEngineService {
     }
 
     private void startHandWithRotatingBlinds() {
+      autoRebuyPlayersWithZeroStack();
       if (!state.isStarted() || countPlayersWithChips() < 2) {
         enterWaitingState(false);
         return;
@@ -513,6 +525,7 @@ public class TableEngineService {
       state.getPlayers().forEach(player -> player.setBetThisRound(0));
       state.setSidePots(List.of());
       state.setStage(TableStage.FINISHED);
+      autoRebuyPlayersWithZeroStack();
       if (state.isPracticeMode()) {
         applyPracticePostHandRules();
       }
@@ -606,6 +619,7 @@ public class TableEngineService {
     }
 
     private void startNewHand() {
+      autoRebuyPlayersWithZeroStack();
       state.setStage(TableStage.PREFLOP);
       state.setHandId(nextHandId(state.getHandId()));
       state.setPot(0);
@@ -644,6 +658,117 @@ public class TableEngineService {
         return "h-%03d".formatted(number + 1);
       } catch (NumberFormatException ignored) {
         return "h-001";
+      }
+    }
+
+    private int leavePlayerAndCashOut(String playerId, String userId) {
+      PlayerState player = findPlayer(playerId);
+      if (player == null) {
+        throw new IllegalStateException("玩家不在牌桌");
+      }
+      foldForLeave(player);
+      int remainingStack = player.getStack();
+      int walletBalance;
+      if (state.isPracticeMode() || walletService == null || userId == null) {
+        walletBalance = walletService != null && userId != null ? walletService.getBalance(userId) : 0;
+      } else {
+        walletBalance = walletService.cashOut(
+            userId,
+            remainingStack,
+            WalletService.roomIdFromTableId(state.getTableId()),
+            state.getTableId(),
+            playerId
+        );
+      }
+      int removedIndex = state.getPlayers().indexOf(player);
+      state.getPlayers().remove(player);
+      reconcileAfterPlayerRemoved(removedIndex);
+      return walletBalance;
+    }
+
+    private void foldForLeave(PlayerState player) {
+      if (!player.isInHand()) {
+        return;
+      }
+      TableStage stage = state.getStage();
+      if (stage == TableStage.WAITING || stage == TableStage.FINISHED) {
+        return;
+      }
+      if (stage == TableStage.SHOWDOWN) {
+        player.setInHand(false);
+        refreshSidePots();
+        return;
+      }
+      PlayerState actor = currentActionPlayerOrNull();
+      if (actor != null && actor.getPlayerId().equals(player.getPlayerId())) {
+        player.setInHand(false);
+        refreshSidePots();
+        progressTurn(false);
+        return;
+      }
+      player.setInHand(false);
+      refreshSidePots();
+      long aliveInHand = state.getPlayers().stream().filter(PlayerState::isInHand).count();
+      if (aliveInHand <= 1) {
+        settleByLastPlayerStanding();
+      }
+    }
+
+    private PlayerState currentActionPlayerOrNull() {
+      if (state.getPlayers().isEmpty()) {
+        return null;
+      }
+      if (state.getStage() == TableStage.WAITING || state.getStage() == TableStage.FINISHED) {
+        return null;
+      }
+      int cursor = state.getActionCursor();
+      if (cursor < 0 || cursor >= state.getPlayers().size()) {
+        return null;
+      }
+      return state.getPlayers().get(cursor);
+    }
+
+    private void reconcileAfterPlayerRemoved(int removedIndex) {
+      if (state.getPlayers().isEmpty()) {
+        enterWaitingState(false);
+        state.setStarted(false);
+        dealerCursor = -1;
+        return;
+      }
+      if (state.getActionCursor() > removedIndex) {
+        state.setActionCursor(state.getActionCursor() - 1);
+      } else if (state.getActionCursor() >= state.getPlayers().size()) {
+        state.setActionCursor(Math.max(0, state.getActionCursor() - 1));
+      }
+      if (dealerCursor > removedIndex) {
+        dealerCursor--;
+      } else if (dealerCursor == removedIndex) {
+        dealerCursor = -1;
+        state.setDealerPlayerId(null);
+        state.setSmallBlindPlayerId(null);
+        state.setBigBlindPlayerId(null);
+      }
+      state.setDealerCursor(dealerCursor);
+      if (state.getPlayers().size() < 2) {
+        enterWaitingState(false);
+        state.setStarted(false);
+        return;
+      }
+      if (countPlayersWithChips() < 2 && state.getStage() != TableStage.WAITING) {
+        enterWaitingState(false);
+      }
+    }
+
+    private void autoRebuyPlayersWithZeroStack() {
+      if (walletService == null || state.isPracticeMode()) {
+        return;
+      }
+      String roomId = WalletService.roomIdFromTableId(state.getTableId());
+      if (roomId == null) {
+        return;
+      }
+      for (PlayerState player : state.getPlayers()) {
+        walletService.tryAutoRebuy(roomId, player.getPlayerId(), player);
       }
     }
 

@@ -2,13 +2,17 @@ package com.pokerfriends.server.service;
 
 import com.pokerfriends.server.dto.CreatePracticeRoomRequest;
 import com.pokerfriends.server.dto.CreateRoomRequest;
+import com.pokerfriends.server.dto.LeaveRoomResponse;
 import com.pokerfriends.server.dto.RoomResponse;
+import com.pokerfriends.server.ws.TableWebSocketHandler;
 import com.pokerfriends.server.persistence.RoomEntity;
 import com.pokerfriends.server.persistence.RoomPlayerEntity;
 import com.pokerfriends.server.persistence.RoomPlayerRepository;
 import com.pokerfriends.server.persistence.RoomRepository;
 import com.pokerfriends.server.persistence.RoomStatus;
+import com.pokerfriends.server.model.WalletTransactionType;
 import com.pokerfriends.server.persistence.UserEntity;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
@@ -31,6 +35,8 @@ public class RoomService {
   private final TableStateSnapshotService tableStateSnapshotService;
   private final UserService userService;
   private final RoomPlayerRepository roomPlayerRepository;
+  private final WalletService walletService;
+  private final TableWebSocketHandler tableWebSocketHandler;
 
   public RoomService(
       RoomRepository roomRepository,
@@ -39,7 +45,9 @@ public class RoomService {
       TableStateMetaService tableStateMetaService,
       TableStateSnapshotService tableStateSnapshotService,
       UserService userService,
-      RoomPlayerRepository roomPlayerRepository
+      RoomPlayerRepository roomPlayerRepository,
+      WalletService walletService,
+      @Lazy TableWebSocketHandler tableWebSocketHandler
   ) {
     this.roomRepository = roomRepository;
     this.authTokenService = authTokenService;
@@ -48,6 +56,8 @@ public class RoomService {
     this.tableStateSnapshotService = tableStateSnapshotService;
     this.userService = userService;
     this.roomPlayerRepository = roomPlayerRepository;
+    this.walletService = walletService;
+    this.tableWebSocketHandler = tableWebSocketHandler;
   }
 
   public RoomResponse createRoom(CreateRoomRequest request) {
@@ -66,13 +76,25 @@ public class RoomService {
         ));
         String playerId = nextPlayerId();
         tableEngineService.initTable(tableId, request.smallBlind(), request.bigBlind(), request.maxPlayers());
-        tableEngineService.addPlayer(tableId, playerId, user.getDisplayName());
+        int walletBalance = walletService.buyIn(
+            user.getUserId(),
+            WalletTransactionType.TABLE_BUY_IN,
+            roomId,
+            tableId,
+            playerId
+        );
+        tableEngineService.addPlayer(
+            tableId,
+            playerId,
+            user.getDisplayName(),
+            WalletService.TABLE_BUY_IN
+        );
         var snapshot = tableEngineService.getSnapshot(tableId);
         tableStateMetaService.upsert(snapshot);
         tableStateSnapshotService.upsert(snapshot);
         roomPlayerRepository.save(new RoomPlayerEntity(roomId, user.getUserId(), playerId));
         refreshRoomStatus(room);
-        return new RoomResponse(roomId, tableId, playerId, authTokenService.issueToken(tableId, playerId));
+        return buildRoomResponse(roomId, tableId, playerId, walletBalance);
       } catch (DataIntegrityViolationException duplicate) {
         if (isRoomIdentityConflict(duplicate)) {
           // roomId/tableId 唯一索引冲突，重试生成新的房间号。
@@ -115,7 +137,7 @@ public class RoomService {
         tableStateMetaService.upsert(snapshot);
         tableStateSnapshotService.upsert(snapshot);
         roomPlayerRepository.save(new RoomPlayerEntity(roomId, user.getUserId(), playerId));
-        return new RoomResponse(roomId, tableId, playerId, authTokenService.issueToken(tableId, playerId));
+        return buildRoomResponse(roomId, tableId, playerId, walletService.getBalance(user.getUserId()));
       } catch (DataIntegrityViolationException duplicate) {
         if (isRoomIdentityConflict(duplicate)) {
           continue;
@@ -132,7 +154,12 @@ public class RoomService {
     RoomEntity room = roomRepository.findByRoomId(roomId).orElseThrow(() -> new IllegalArgumentException("房间不存在"));
     RoomPlayerEntity existed = roomPlayerRepository.findByRoomIdAndUserId(roomId, userId).orElse(null);
     if (existed != null) {
-      return new RoomResponse(roomId, room.getTableId(), existed.getPlayerId(), authTokenService.issueToken(room.getTableId(), existed.getPlayerId()));
+      return buildRoomResponse(
+          roomId,
+          room.getTableId(),
+          existed.getPlayerId(),
+          walletService.getBalance(userId)
+      );
     }
     ensureTableLoaded(room);
     String tableId = room.getTableId();
@@ -140,13 +167,65 @@ public class RoomService {
       throw new IllegalStateException("房间已满");
     }
     String playerId = nextPlayerId();
-    tableEngineService.addPlayer(tableId, playerId, user.getDisplayName());
+    int walletBalance = walletService.buyIn(
+        userId,
+        WalletTransactionType.TABLE_BUY_IN,
+        roomId,
+        tableId,
+        playerId
+    );
+    tableEngineService.addPlayer(tableId, playerId, user.getDisplayName(), WalletService.TABLE_BUY_IN);
     var snapshot = tableEngineService.getSnapshot(tableId);
     tableStateMetaService.upsert(snapshot);
     tableStateSnapshotService.upsert(snapshot);
     roomPlayerRepository.save(new RoomPlayerEntity(roomId, userId, playerId));
     refreshRoomStatus(room);
-    return new RoomResponse(roomId, tableId, playerId, authTokenService.issueToken(tableId, playerId));
+    return buildRoomResponse(roomId, tableId, playerId, walletBalance);
+  }
+
+  public LeaveRoomResponse leaveRoom(String roomId, String playerName) {
+    UserEntity user = userService.requireByDisplayName(playerName);
+    RoomEntity room = roomRepository.findByRoomId(roomId).orElseThrow(() -> new IllegalArgumentException("房间不存在"));
+    RoomPlayerEntity mapping = roomPlayerRepository.findByRoomIdAndUserId(roomId, user.getUserId())
+        .orElseThrow(() -> new IllegalStateException("未在该房间入座"));
+    int walletBalance = leaveSeatedPlayer(room, mapping);
+    tableWebSocketHandler.notifyTableUpdated(room.getTableId());
+    return new LeaveRoomResponse(walletBalance);
+  }
+
+  public void leaveRoomByTablePlayer(String tableId, String playerId) {
+    RoomEntity room = roomRepository.findByTableId(tableId).orElse(null);
+    if (room == null) {
+      return;
+    }
+    RoomPlayerEntity mapping = roomPlayerRepository.findByRoomIdAndPlayerId(room.getRoomId(), playerId).orElse(null);
+    if (mapping == null) {
+      return;
+    }
+    leaveSeatedPlayer(room, mapping);
+    tableWebSocketHandler.notifyTableUpdated(tableId);
+  }
+
+  private int leaveSeatedPlayer(RoomEntity room, RoomPlayerEntity mapping) {
+    ensureTableLoaded(room);
+    String tableId = room.getTableId();
+    int walletBalance = tableEngineService.leavePlayer(tableId, mapping.getPlayerId(), mapping.getUserId());
+    roomPlayerRepository.delete(mapping);
+    var snapshot = tableEngineService.getSnapshot(tableId);
+    tableStateMetaService.upsert(snapshot);
+    tableStateSnapshotService.upsert(snapshot);
+    refreshRoomStatus(room);
+    return walletBalance;
+  }
+
+  private RoomResponse buildRoomResponse(String roomId, String tableId, String playerId, int walletBalance) {
+    return new RoomResponse(
+        roomId,
+        tableId,
+        playerId,
+        authTokenService.issueToken(tableId, playerId),
+        walletBalance
+    );
   }
 
   public void ensureTableLoadedByTableId(String tableId) {

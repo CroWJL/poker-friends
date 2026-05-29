@@ -14,7 +14,10 @@ import { ConnectionBanner } from "./components/ConnectionBanner";
 import { EventFeed } from "./components/EventFeed";
 import { PlayerSeats } from "./components/PlayerSeats";
 import { PracticeResultOverlay } from "./components/PracticeResultOverlay";
+import { LandscapeRotatePrompt } from "./components/LandscapeRotatePrompt";
 import { SettlementOverlay } from "./components/SettlementOverlay";
+import { UserProfilePanel, type WalletTransactionView } from "./components/UserProfilePanel";
+import { useIsMobileLayout, useIsPortrait, useLandscapeLock } from "./hooks/useMediaQuery";
 import "./poker-theme.css";
 
 interface PokerAppProps {
@@ -29,6 +32,7 @@ interface RoomResponse {
   tableId: string;
   playerId: string;
   token: string;
+  walletBalance: number;
 }
 
 const STAGE_LABELS: Record<string, string> = {
@@ -50,6 +54,12 @@ export function PokerApp({ platform, config }: PokerAppProps) {
   const [selfPlayerId, setSelfPlayerId] = useState("");
   const [showDebug, setShowDebug] = useState(false);
   const [eventFeed, setEventFeed] = useState<string[]>([]);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [walletTransactions, setWalletTransactions] = useState<WalletTransactionView[]>([]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [startPending, setStartPending] = useState(false);
   const [settlementAwards, setSettlementAwards] = useState<
@@ -132,6 +142,13 @@ export function PokerApp({ platform, config }: PokerAppProps) {
   }, [playerName]);
 
   useEffect(() => {
+    if (!token || !tableId || !selfPlayerId) {
+      return;
+    }
+    void refreshWalletBalance(playerName);
+  }, [playerName, token, tableId, selfPlayerId]);
+
+  useEffect(() => {
     Promise.all([platform.getStoredPlayerName(), platform.getStoredSession()])
       .then(([storedName, storedSession]) => {
         if (storedName) {
@@ -139,6 +156,9 @@ export function PokerApp({ platform, config }: PokerAppProps) {
         }
         if (storedSession) {
           applySession(storedSession);
+          if (storedName) {
+            void refreshWalletBalance(storedName);
+          }
           connectWs(storedSession.tableId, storedSession.playerId, storedSession.token);
         }
       })
@@ -172,6 +192,9 @@ export function PokerApp({ platform, config }: PokerAppProps) {
             showToast(`阶段：${formatStageLabel(nextSnapshot.stage)}`);
           }
           previousStageRef.current = nextSnapshot.stage;
+          if (nextSnapshot.stage === "FINISHED" && !fullSnapshot.practiceMode) {
+            void refreshWalletBalance(playerNameRef.current);
+          }
         }
         if (nextSnapshot.potAwards && nextSnapshot.potAwards.length > 0) {
           const settlementFeedKey = `${nextSnapshot.handId ?? "unknown"}:${nextSnapshot.potAwards
@@ -261,6 +284,67 @@ export function PokerApp({ platform, config }: PokerAppProps) {
     };
   }, [setActionPending, setConnectionStatus, setError, setSnapshot, wsClient]);
 
+  const fetchUserProfile = async (displayName: string, options?: { silent?: boolean }) => {
+    const normalized = displayName.trim();
+    if (!normalized) {
+      if (!options?.silent) {
+        setProfileError("请先输入玩家昵称");
+      }
+      return;
+    }
+    if (!options?.silent) {
+      setProfileLoading(true);
+      setProfileError(null);
+    }
+    try {
+      const profileUrl = `${config.apiBaseUrl}/api/users/profile?displayName=${encodeURIComponent(normalized)}`;
+      const transactionsUrl = `${config.apiBaseUrl}/api/users/wallet/transactions?displayName=${encodeURIComponent(normalized)}&limit=30`;
+      if (options?.silent) {
+        const profileResp = await fetch(profileUrl);
+        if (!profileResp.ok) {
+          return;
+        }
+        const data = (await profileResp.json()) as { userId: string; displayName: string; walletBalance: number };
+        setUserId(data.userId);
+        setWalletBalance(data.walletBalance);
+        return;
+      }
+      const [profileResp, txResp] = await Promise.all([fetch(profileUrl), fetch(transactionsUrl)]);
+      if (!profileResp.ok) {
+        const message = (await profileResp.text()) || `加载失败(${profileResp.status})`;
+        throw new Error(message);
+      }
+      const data = (await profileResp.json()) as { userId: string; displayName: string; walletBalance: number };
+      setUserId(data.userId);
+      setWalletBalance(data.walletBalance);
+      if (txResp.ok) {
+        const transactions = (await txResp.json()) as WalletTransactionView[];
+        setWalletTransactions(transactions);
+      } else {
+        setWalletTransactions([]);
+      }
+      setProfileError(null);
+    } catch (error) {
+      if (!options?.silent) {
+        setProfileError(error instanceof Error ? error.message : "加载个人信息失败");
+      }
+    } finally {
+      if (!options?.silent) {
+        setProfileLoading(false);
+      }
+    }
+  };
+
+  const refreshWalletBalance = (displayName: string) => fetchUserProfile(displayName, { silent: true });
+
+  const openProfile = () => {
+    if (!token || !tableId || !selfPlayerId) {
+      return;
+    }
+    setShowProfile(true);
+    void fetchUserProfile(playerName);
+  };
+
   const connectWs = (table: string, player: string, authToken: string) => {
     const wsBase = config.apiBaseUrl.replace(/^http/, "ws");
     wsClient.connect(`${wsBase}/ws/table/${table}?playerId=${player}&token=${authToken}`);
@@ -297,6 +381,7 @@ export function PokerApp({ platform, config }: PokerAppProps) {
         throw new Error(message || `人机对战创建失败(${resp.status})`);
       }
       const data = (await resp.json()) as RoomResponse;
+      setWalletBalance(data.walletBalance);
       await saveSession({
         roomId: data.roomId,
         tableId: data.tableId,
@@ -327,6 +412,7 @@ export function PokerApp({ platform, config }: PokerAppProps) {
         throw new Error(`创建房间失败(${resp.status})`);
       }
       const data = (await resp.json()) as RoomResponse;
+      setWalletBalance(data.walletBalance);
       await saveSession({
         roomId: data.roomId,
         tableId: data.tableId,
@@ -362,6 +448,7 @@ export function PokerApp({ platform, config }: PokerAppProps) {
         throw new Error(`加入房间失败(${resp.status})`);
       }
       const data = (await resp.json()) as RoomResponse;
+      setWalletBalance(data.walletBalance);
       await saveSession({
         roomId: data.roomId,
         tableId: data.tableId,
@@ -374,7 +461,9 @@ export function PokerApp({ platform, config }: PokerAppProps) {
     }
   };
 
-  const leaveRoom = async () => {
+  const clearLocalSession = () => {
+    setShowProfile(false);
+    setProfileError(null);
     wsClient.close();
     clearSnapshot();
     setActionPending(false);
@@ -392,7 +481,29 @@ export function PokerApp({ platform, config }: PokerAppProps) {
     lastSettlementDisplayKeyRef.current = null;
     pendingActionRef.current = null;
     previousStageRef.current = undefined;
-    await platform.clearStoredSession();
+  };
+
+  const leaveRoom = async () => {
+    const activeRoomId = roomId;
+    const activePlayerName = playerName.trim();
+    try {
+      if (activeRoomId && activePlayerName) {
+        const resp = await fetch(`${config.apiBaseUrl}/api/rooms/${activeRoomId}/leave`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ playerName: activePlayerName })
+        });
+        if (resp.ok) {
+          const data = (await resp.json()) as { walletBalance: number };
+          setWalletBalance(data.walletBalance);
+        }
+      }
+    } catch {
+      // 本地仍清理会话，避免卡在无效房间
+    } finally {
+      clearLocalSession();
+      await platform.clearStoredSession();
+    }
   };
 
   const sendAction = (action: ActionCommand) => {
@@ -560,9 +671,13 @@ export function PokerApp({ platform, config }: PokerAppProps) {
   const canCreateRoom = playerName.trim().length > 0;
   const canJoinRoom = playerName.trim().length > 0 && roomId.trim().length > 0;
   const canStartPractice = playerName.trim().length > 0;
+  const isMobileLayout = useIsMobileLayout();
+  const isPortrait = useIsPortrait();
+  useLandscapeLock(hasActiveSession && isMobileLayout);
 
   return (
-    <main className="pf-app">
+    <main className={`pf-app ${isMobileLayout ? "pf-app-mobile" : ""}`}>
+      {isMobileLayout && hasActiveSession && isPortrait ? <LandscapeRotatePrompt /> : null}
       {practiceOutcome ? (
         <PracticeResultOverlay outcome={practiceOutcome} onConfirm={acknowledgePracticeOutcome} />
       ) : null}
@@ -575,15 +690,39 @@ export function PokerApp({ platform, config }: PokerAppProps) {
           onConfirm={confirmSettlementAndContinue}
         />
       ) : null}
+      {showProfile && hasActiveSession ? (
+        <UserProfilePanel
+          displayName={playerName}
+          userId={userId ?? undefined}
+          walletBalance={walletBalance}
+          tableStack={hasActiveSession ? (selfPlayer?.stack ?? null) : null}
+          roomId={hasActiveSession ? roomId : undefined}
+          transactions={walletTransactions}
+          loading={profileLoading}
+          error={profileError ?? undefined}
+          onClose={() => setShowProfile(false)}
+          onRefresh={() => void fetchUserProfile(playerName)}
+        />
+      ) : null}
       <header className="pf-app-header">
         <div className="pf-brand-block">
           <p className="pf-subtitle">{platform.name} 客户端</p>
         </div>
         <div className="pf-header-actions">
           {hasActiveSession ? (
-            <button className="pf-header-leave" onClick={leaveRoom}>
-              离开房间
-            </button>
+            <>
+              <button
+                type="button"
+                className="pf-profile-entry"
+                onClick={openProfile}
+                title="查看个人信息与钱包"
+              >
+                我的信息
+              </button>
+              <button className="pf-header-leave" onClick={leaveRoom}>
+                离开房间
+              </button>
+            </>
           ) : null}
           <ConnectionBanner status={connectionStatus} />
         </div>
@@ -620,7 +759,7 @@ export function PokerApp({ platform, config }: PokerAppProps) {
           {lastError ? <p className="pf-error-box">错误：{lastError}</p> : null}
         </section>
       ) : (
-        <section className="pf-table-layout">
+        <section className={`pf-table-layout ${isMobileLayout ? "pf-table-layout-mobile" : ""}`}>
           {toastMessage ? <div className="pf-toast">{toastMessage}</div> : null}
           <div className="pf-main-column">
             <PlayerSeats
@@ -638,6 +777,7 @@ export function PokerApp({ platform, config }: PokerAppProps) {
               smallBlindPlayerId={snapshot?.smallBlindPlayerId}
               bigBlindPlayerId={snapshot?.bigBlindPlayerId}
               currentActionPlayer={currentActionPlayer}
+              layout={isMobileLayout ? "mobile" : "desktop"}
             />
           </div>
           <aside className="pf-side-column">
@@ -653,17 +793,22 @@ export function PokerApp({ platform, config }: PokerAppProps) {
               betThisRound={selfPlayer?.betThisRound ?? 0}
               disabled={waitingForPlayers || handLocked}
               disabledReason={actionDisabledReason}
+              variant={isMobileLayout ? "compact" : "default"}
               onSendAction={sendAction}
             />
-            <EventFeed items={eventFeed} />
+            <EventFeed items={eventFeed} variant={isMobileLayout ? "drawer" : "default"} />
             {lastError ? <p className="pf-error-box">错误：{lastError}</p> : null}
-            <button className="pf-debug-toggle" onClick={previewEightPlayers}>
-              模拟8人牌桌
-            </button>
-            <button className="pf-debug-toggle" onClick={() => setShowDebug((value) => !value)}>
-              {showDebug ? "隐藏调试快照" : "显示调试快照"}
-            </button>
-            {showDebug ? <pre className="pf-debug-panel">{JSON.stringify(snapshot, null, 2)}</pre> : null}
+            {!isMobileLayout ? (
+              <>
+                <button className="pf-debug-toggle" onClick={previewEightPlayers}>
+                  模拟8人牌桌
+                </button>
+                <button className="pf-debug-toggle" onClick={() => setShowDebug((value) => !value)}>
+                  {showDebug ? "隐藏调试快照" : "显示调试快照"}
+                </button>
+                {showDebug ? <pre className="pf-debug-panel">{JSON.stringify(snapshot, null, 2)}</pre> : null}
+              </>
+            ) : null}
           </aside>
         </section>
       )}

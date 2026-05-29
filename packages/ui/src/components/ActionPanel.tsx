@@ -8,6 +8,7 @@ interface ActionPanelProps {
   betThisRound: number;
   disabled?: boolean;
   disabledReason?: string;
+  variant?: "default" | "compact";
   onSendAction: (action: ActionCommand) => void;
 }
 
@@ -18,6 +19,7 @@ export function ActionPanel({
   betThisRound,
   disabled = false,
   disabledReason,
+  variant = "default",
   onSendAction
 }: ActionPanelProps) {
   const [raiseTo, setRaiseTo] = useState(20);
@@ -32,10 +34,15 @@ export function ActionPanel({
     return [base, Math.min(maxRaiseTo, base * 2), Math.min(maxRaiseTo, base * 3)];
   }, [minRaiseTo, maxRaiseTo]);
   const disabledAll = actionPending || disabled;
+  const isCompact = variant === "compact";
 
   return (
-    <section className={`pf-action-panel ${actionPending ? "pf-action-panel-pending" : ""}`}>
-      <h3 className="pf-panel-title">行动面板</h3>
+    <section
+      className={`pf-action-panel ${isCompact ? "pf-action-panel-compact" : ""} ${
+        actionPending ? "pf-action-panel-pending" : ""
+      }`}
+    >
+      {!isCompact ? <h3 className="pf-panel-title">行动面板</h3> : null}
       <div className="pf-action-grid">
         <button className="pf-action-btn pf-action-btn-check" onClick={() => onSendAction({ type: "CHECK" })} disabled={disabledAll || !legalActions.canCheck}>
           Check
@@ -50,51 +57,74 @@ export function ActionPanel({
           All-in
         </button>
       </div>
-      <div className="pf-raise-row">
-        <input
-          className="pf-raise-input"
-          type="number"
-          min={minRaiseTo}
-          max={maxRaiseTo}
-          value={defaultRaiseTo}
-          onChange={(event) => setRaiseTo(Number(event.target.value || 0))}
-          disabled={disabledAll || !legalActions.canRaise}
-        />
-        <button
-          className="pf-action-btn pf-action-btn-raise"
-          onClick={() => onSendAction({ type: "RAISE", amount: defaultRaiseTo })}
-          disabled={disabledAll || !legalActions.canRaise}
-        >
-          Raise
-        </button>
-      </div>
-      <input
-        className="pf-raise-slider"
-        type="range"
-        min={minRaiseTo}
-        max={maxRaiseTo}
-        step={1}
-        value={defaultRaiseTo}
-        onChange={(event) => setRaiseTo(Number(event.target.value || minRaiseTo))}
-        disabled={disabledAll || !legalActions.canRaise}
-      />
-      <div className="pf-quick-raise-row">
-        {quickRaiseValues.map((value) => (
-          <button
-            key={value}
-            className="pf-quick-raise-btn"
-            onClick={() => setRaiseTo(value)}
+      {isCompact ? (
+        <div className="pf-quick-raise-row pf-quick-raise-row-compact">
+          {quickRaiseValues.map((value) => (
+            <button
+              key={value}
+              className="pf-quick-raise-btn"
+              onClick={() => onSendAction({ type: "RAISE", amount: value })}
+              disabled={disabledAll || !legalActions.canRaise}
+            >
+              {value}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <>
+          <div className="pf-raise-row">
+            <input
+              className="pf-raise-input"
+              type="number"
+              min={minRaiseTo}
+              max={maxRaiseTo}
+              value={defaultRaiseTo}
+              onChange={(event) => setRaiseTo(Number(event.target.value || 0))}
+              disabled={disabledAll || !legalActions.canRaise}
+            />
+            <button
+              className="pf-action-btn pf-action-btn-raise"
+              onClick={() => onSendAction({ type: "RAISE", amount: defaultRaiseTo })}
+              disabled={disabledAll || !legalActions.canRaise}
+            >
+              Raise
+            </button>
+          </div>
+          <input
+            className="pf-raise-slider"
+            type="range"
+            min={minRaiseTo}
+            max={maxRaiseTo}
+            step={1}
+            value={defaultRaiseTo}
+            onChange={(event) => setRaiseTo(Number(event.target.value || minRaiseTo))}
             disabled={disabledAll || !legalActions.canRaise}
-          >
-            {value}
-          </button>
-        ))}
-      </div>
-      <p className="pf-action-hint">
-        最小加注到：{minRaiseTo} · 最大加注到：{maxRaiseTo}
-        {actionPending ? " · 动作提交中..." : ""}
-        {!actionPending && disabled && disabledReason ? ` · ${disabledReason}` : ""}
-      </p>
+          />
+          <div className="pf-quick-raise-row">
+            {quickRaiseValues.map((value) => (
+              <button
+                key={value}
+                className="pf-quick-raise-btn"
+                onClick={() => setRaiseTo(value)}
+                disabled={disabledAll || !legalActions.canRaise}
+              >
+                {value}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      {!isCompact || actionPending || (disabled && disabledReason) ? (
+        <p className="pf-action-hint">
+          {!isCompact ? (
+            <>
+              最小加注到：{minRaiseTo} · 最大加注到：{maxRaiseTo}
+            </>
+          ) : null}
+          {actionPending ? " · 动作提交中..." : ""}
+          {!actionPending && disabled && disabledReason ? ` · ${disabledReason}` : ""}
+        </p>
+      ) : null}
     </section>
   );
 }

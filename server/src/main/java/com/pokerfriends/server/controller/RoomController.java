@@ -4,6 +4,8 @@ import com.pokerfriends.server.dto.ActionEventResponse;
 import com.pokerfriends.server.dto.CreatePracticeRoomRequest;
 import com.pokerfriends.server.dto.CreateRoomRequest;
 import com.pokerfriends.server.dto.JoinRoomRequest;
+import com.pokerfriends.server.dto.LeaveRoomRequest;
+import com.pokerfriends.server.dto.LeaveRoomResponse;
 import com.pokerfriends.server.dto.RoomOverviewResponse;
 import com.pokerfriends.server.dto.RoomResponse;
 import com.pokerfriends.server.service.ActionEventLogService;
@@ -61,6 +63,17 @@ public class RoomController {
   public RoomResponse joinRoom(@PathVariable String roomId, @Valid @RequestBody JoinRoomRequest request) {
     try {
       return roomService.joinRoom(roomId, request.playerName());
+    } catch (IllegalArgumentException ex) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage());
+    } catch (IllegalStateException ex) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, ex.getMessage());
+    }
+  }
+
+  @PostMapping("/{roomId}/leave")
+  public LeaveRoomResponse leaveRoom(@PathVariable String roomId, @Valid @RequestBody LeaveRoomRequest request) {
+    try {
+      return roomService.leaveRoom(roomId, request.playerName());
     } catch (IllegalArgumentException ex) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage());
     } catch (IllegalStateException ex) {

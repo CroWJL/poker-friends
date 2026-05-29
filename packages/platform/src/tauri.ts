@@ -4,6 +4,22 @@ import type { AppPlatform, StoredPokerSession } from "./index";
 const PLAYER_NAME_KEY = "poker_friends_player_name";
 const SESSION_KEY = "poker_friends_session";
 
+function readSession(): StoredPokerSession | undefined {
+  const raw = sessionStorage.getItem(SESSION_KEY);
+  if (!raw) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(raw) as StoredPokerSession;
+  } catch {
+    return undefined;
+  }
+}
+
+function clearLegacySession() {
+  localStorage.removeItem(SESSION_KEY);
+}
+
 export function createTauriPlatform(): AppPlatform {
   return {
     name: "desktop",
@@ -17,21 +33,14 @@ export function createTauriPlatform(): AppPlatform {
       localStorage.setItem(PLAYER_NAME_KEY, name);
     },
     async getStoredSession() {
-      const raw = localStorage.getItem(SESSION_KEY);
-      if (!raw) {
-        return undefined;
-      }
-      try {
-        return JSON.parse(raw) as StoredPokerSession;
-      } catch {
-        return undefined;
-      }
+      clearLegacySession();
+      return readSession();
     },
     async setStoredSession(session: StoredPokerSession) {
-      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
     },
     async clearStoredSession() {
-      localStorage.removeItem(SESSION_KEY);
+      sessionStorage.removeItem(SESSION_KEY);
     }
   };
 }

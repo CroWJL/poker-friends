@@ -28,12 +28,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 @Component
 public class TableWebSocketHandler extends TextWebSocketHandler {
+  private static final long DISCONNECT_LEAVE_DELAY_SECONDS = 8;
+
   private final ObjectMapper objectMapper;
   private final AuthTokenService authTokenService;
   private final RoomService roomService;
@@ -43,6 +46,7 @@ public class TableWebSocketHandler extends TextWebSocketHandler {
   private final ActionEventLogService actionEventLogService;
   private final BotOrchestratorService botOrchestratorService;
   private final Map<String, Map<String, WebSocketSession>> tableSessions = new ConcurrentHashMap<>();
+  private final Map<String, ScheduledFuture<?>> pendingDisconnectLeave = new ConcurrentHashMap<>();
   private final ScheduledExecutorService settlementScheduler = Executors.newSingleThreadScheduledExecutor();
 
   public TableWebSocketHandler(
@@ -79,6 +83,7 @@ public class TableWebSocketHandler extends TextWebSocketHandler {
 
     session.getAttributes().put("tableId", tableId);
     session.getAttributes().put("playerId", playerId);
+    cancelScheduledLeave(tableId, playerId);
     tableSessions.computeIfAbsent(tableId, k -> new ConcurrentHashMap<>()).put(playerId, session);
     try {
       roomService.ensureTableLoadedByTableId(tableId);
@@ -165,7 +170,39 @@ public class TableWebSocketHandler extends TextWebSocketHandler {
     Map<String, WebSocketSession> sessions = tableSessions.get(tableId);
     if (sessions != null) {
       sessions.remove(playerId);
+      if (sessions.isEmpty()) {
+        tableSessions.remove(tableId);
+      }
     }
+    scheduleLeaveAfterDisconnect(tableId, playerId);
+  }
+
+  private String disconnectLeaveKey(String tableId, String playerId) {
+    return tableId + ":" + playerId;
+  }
+
+  private void cancelScheduledLeave(String tableId, String playerId) {
+    ScheduledFuture<?> pending = pendingDisconnectLeave.remove(disconnectLeaveKey(tableId, playerId));
+    if (pending != null) {
+      pending.cancel(false);
+    }
+  }
+
+  private void scheduleLeaveAfterDisconnect(String tableId, String playerId) {
+    cancelScheduledLeave(tableId, playerId);
+    String key = disconnectLeaveKey(tableId, playerId);
+    ScheduledFuture<?> future = settlementScheduler.schedule(
+        () -> {
+          pendingDisconnectLeave.remove(key);
+          try {
+            roomService.leaveRoomByTablePlayer(tableId, playerId);
+          } catch (Exception ignored) {
+          }
+        },
+        DISCONNECT_LEAVE_DELAY_SECONDS,
+        TimeUnit.SECONDS
+    );
+    pendingDisconnectLeave.put(key, future);
   }
 
   private void broadcastTableSnapshot(String tableId, TableState snapshot, WebSocketSession skipSession) {
@@ -357,5 +394,14 @@ public class TableWebSocketHandler extends TextWebSocketHandler {
       } catch (Exception ignored) {
       }
     }, 3, TimeUnit.SECONDS);
+  }
+
+  public void notifyTableUpdated(String tableId) {
+    try {
+      roomService.ensureTableLoadedByTableId(tableId);
+      TableState snapshot = tableEngineService.getSnapshot(tableId);
+      publishTableState(tableId, snapshot, null);
+    } catch (Exception ignored) {
+    }
   }
 }

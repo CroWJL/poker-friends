@@ -1,5 +1,8 @@
+import { useState } from "react";
+
 interface EventFeedProps {
   items: string[];
+  variant?: "default" | "drawer";
 }
 
 const EVENT_BADGE_LABEL: Array<{ prefix: string; label: string; className: string }> = [
@@ -25,28 +28,53 @@ function resolveBadge(content: string) {
   return EVENT_BADGE_LABEL.find((rule) => content.startsWith(rule.prefix));
 }
 
-export function EventFeed({ items }: EventFeedProps) {
+function EventFeedList({ items }: { items: string[] }) {
+  if (items.length === 0) {
+    return <p className="pf-event-empty">暂无动态</p>;
+  }
+
+  return (
+    <ul className="pf-event-list">
+      {items.map((item, index) => {
+        const { time, content } = splitFeedItem(item);
+        const badge = resolveBadge(content);
+        const renderedContent = badge ? content.slice(badge.prefix.length) : content;
+        return (
+          <li key={`${item}-${index}`} className={badge ? "pf-event-item pf-event-item-badged" : "pf-event-item"}>
+            <span className="pf-event-time">{time}</span>
+            {badge ? <span className={`pf-event-badge ${badge.className}`}>{badge.label}</span> : null}
+            <span className="pf-event-content">{renderedContent}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+export function EventFeed({ items, variant = "default" }: EventFeedProps) {
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  if (variant === "drawer") {
+    return (
+      <section className={`pf-event-feed pf-event-feed-drawer ${drawerOpen ? "pf-event-feed-drawer-open" : ""}`}>
+        <button
+          type="button"
+          className="pf-event-drawer-toggle"
+          onClick={() => setDrawerOpen((open) => !open)}
+          aria-expanded={drawerOpen}
+        >
+          <span>牌桌动态{items.length > 0 ? ` (${items.length})` : ""}</span>
+          <span className="pf-event-drawer-chevron">{drawerOpen ? "▾" : "▴"}</span>
+        </button>
+        {drawerOpen ? <EventFeedList items={items} /> : null}
+      </section>
+    );
+  }
+
   return (
     <section className="pf-event-feed">
       <h3 className="pf-panel-title">牌桌动态</h3>
-      {items.length === 0 ? (
-        <p className="pf-event-empty">暂无动态</p>
-      ) : (
-        <ul className="pf-event-list">
-          {items.map((item, index) => {
-            const { time, content } = splitFeedItem(item);
-            const badge = resolveBadge(content);
-            const renderedContent = badge ? content.slice(badge.prefix.length) : content;
-            return (
-              <li key={`${item}-${index}`} className={badge ? "pf-event-item pf-event-item-badged" : "pf-event-item"}>
-                <span className="pf-event-time">{time}</span>
-                {badge ? <span className={`pf-event-badge ${badge.className}`}>{badge.label}</span> : null}
-                <span className="pf-event-content">{renderedContent}</span>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <EventFeedList items={items} />
     </section>
   );
 }
