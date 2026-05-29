@@ -195,6 +195,15 @@
   gap: 10px;
 }
 
+.pf-practice-btn {
+  background: linear-gradient(180deg, #1d4ed8 0%, #1e40af 100%) !important;
+  border-color: rgba(96, 165, 250, 0.55) !important;
+}
+
+.pf-practice-btn:hover:not(:disabled) {
+  background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%) !important;
+}
+
 .pf-home-card .pf-lobby-actions button {
   width: 100%;
   height: 40px;
@@ -980,6 +989,61 @@
   font-size: 12px;
 }
 
+.pf-practice-result-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  background: rgba(2, 8, 20, 0.78);
+  backdrop-filter: blur(4px);
+}
+
+.pf-practice-result-card {
+  width: min(360px, 92vw);
+  padding: 28px 24px;
+  border-radius: 16px;
+  border: 1px solid rgba(214, 177, 95, 0.35);
+  background: linear-gradient(180deg, rgba(15, 32, 52, 0.98) 0%, rgba(8, 20, 36, 0.98) 100%);
+  text-align: center;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+}
+
+.pf-practice-result-title {
+  margin: 0 0 10px;
+  font-size: 36px;
+  letter-spacing: 0.5px;
+}
+
+.pf-practice-result-title.is-win {
+  color: #34d399;
+}
+
+.pf-practice-result-title.is-lose {
+  color: #f87171;
+}
+
+.pf-practice-result-subtitle {
+  margin: 0 0 22px;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.pf-practice-result-btn {
+  min-width: 120px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid rgba(214, 177, 95, 0.45);
+  background: linear-gradient(180deg, #b8862d 0%, #8f6420 100%);
+  color: #fff7e8;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pf-practice-result-btn:hover {
+  filter: brightness(1.06);
+}
+
 .pf-settlement-mask {
   position: fixed;
   inset: 0;
@@ -1057,6 +1121,22 @@
 .pf-settlement-cards .pf-card-face {
   width: 44px;
   height: 62px;
+}
+
+.pf-settlement-confirm-btn {
+  width: 100%;
+  height: 40px;
+  margin-top: 4px;
+  border-radius: 10px;
+  border: 1px solid rgba(214, 177, 95, 0.45);
+  background: linear-gradient(180deg, #b8862d 0%, #8f6420 100%);
+  color: #fff7e8;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pf-settlement-confirm-btn:hover {
+  filter: brightness(1.06);
 }
 
 @keyframes pfDealIn {

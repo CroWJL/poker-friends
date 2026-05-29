@@ -94,6 +94,8 @@ public class TableStateSnapshotService {
       state.setActionsInStage(root.path("actionsInStage").asInt(0));
       state.setPlayersToAct(root.path("playersToAct").asInt(0));
       state.setStarted(root.path("started").asBoolean(false));
+      state.setPracticeMode(root.path("practiceMode").asBoolean(false));
+      state.setPracticeOutcome(asNullableText(root.path("practiceOutcome")));
       state.setDealerPlayerId(asNullableText(root.path("dealerPlayerId")));
       state.setSmallBlindPlayerId(asNullableText(root.path("smallBlindPlayerId")));
       state.setBigBlindPlayerId(asNullableText(root.path("bigBlindPlayerId")));

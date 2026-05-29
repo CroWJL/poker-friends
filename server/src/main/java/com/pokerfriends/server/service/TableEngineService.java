@@ -24,23 +24,39 @@ import java.util.stream.Collectors;
 
 @Service
 public class TableEngineService {
+  public static final int PRACTICE_HUMAN_STACK = 1000;
+  public static final int PRACTICE_BOT_STACK = 500;
+  public static final int PRACTICE_BOT_COUNT = 7;
+
   private final Map<String, TableActor> tables = new ConcurrentHashMap<>();
   private final DeckService deckService;
   private final HandEvaluatorService handEvaluatorService;
+  private final BotNameService botNameService;
 
   TableEngineService() {
-    this(new DeckService(), new HandEvaluatorService());
+    this(new DeckService(), new HandEvaluatorService(), new BotNameService());
   }
 
   @Autowired
-  public TableEngineService(DeckService deckService, HandEvaluatorService handEvaluatorService) {
+  public TableEngineService(
+      DeckService deckService,
+      HandEvaluatorService handEvaluatorService,
+      BotNameService botNameService
+  ) {
     this.deckService = deckService;
     this.handEvaluatorService = handEvaluatorService;
+    this.botNameService = botNameService;
   }
 
   public void initTable(String tableId, int smallBlind, int bigBlind, int maxPlayers) {
     tables.computeIfAbsent(tableId, id -> new TableActor(
-        id, smallBlind, bigBlind, maxPlayers, deckService, handEvaluatorService
+        id, smallBlind, bigBlind, maxPlayers, false, deckService, handEvaluatorService
+    ));
+  }
+
+  public void initPracticeTable(String tableId, int smallBlind, int bigBlind, int maxPlayers) {
+    tables.computeIfAbsent(tableId, id -> new TableActor(
+        id, smallBlind, bigBlind, maxPlayers, true, deckService, handEvaluatorService
     ));
   }
 
@@ -54,6 +70,7 @@ public class TableEngineService {
         smallBlind,
         bigBlind,
         maxPlayers,
+        snapshot.isPracticeMode(),
         deckService,
         handEvaluatorService,
         snapshot
@@ -61,11 +78,27 @@ public class TableEngineService {
   }
 
   public void addPlayer(String tableId, String playerId, String playerName) {
+    addPlayer(tableId, playerId, playerName, 1000);
+  }
+
+  public void addPlayer(String tableId, String playerId, String playerName, int initialStack) {
     TableActor actor = getActor(tableId);
     actor.run(() -> {
-      actor.addPlayer(playerId, playerName);
+      actor.addPlayer(playerId, playerName, initialStack);
       return null;
     }).join();
+  }
+
+  public CompletableFuture<TableState> acknowledgePracticeOutcome(String tableId, String playerId) {
+    List<String> botNames = botNameService.randomBotNames(PRACTICE_BOT_COUNT);
+    return getActor(tableId).run(() -> {
+      getActor(tableId).acknowledgePracticeOutcome(playerId, botNames);
+      return getActor(tableId).state();
+    });
+  }
+
+  public List<String> randomPracticeBotNames() {
+    return botNameService.randomBotNames(PRACTICE_BOT_COUNT);
   }
 
   public int playerCount(String tableId) {
@@ -114,11 +147,13 @@ public class TableEngineService {
         int smallBlind,
         int bigBlind,
         int maxPlayers,
+        boolean practiceMode,
         DeckService deckService,
         HandEvaluatorService handEvaluatorService
     ) {
       this.executor = Executors.newSingleThreadExecutor();
       this.state = new TableState(tableId);
+      this.state.setPracticeMode(practiceMode);
       this.smallBlind = smallBlind;
       this.bigBlind = bigBlind;
       this.maxPlayers = maxPlayers;
@@ -133,12 +168,16 @@ public class TableEngineService {
         int smallBlind,
         int bigBlind,
         int maxPlayers,
+        boolean practiceMode,
         DeckService deckService,
         HandEvaluatorService handEvaluatorService,
         TableState snapshot
     ) {
       this.executor = Executors.newSingleThreadExecutor();
       this.state = snapshot;
+      if (!this.state.isPracticeMode()) {
+        this.state.setPracticeMode(practiceMode);
+      }
       this.smallBlind = smallBlind;
       this.bigBlind = bigBlind;
       this.maxPlayers = maxPlayers;
@@ -153,12 +192,12 @@ public class TableEngineService {
       return CompletableFuture.supplyAsync(() -> task.run(), executor);
     }
 
-    private void addPlayer(String playerId, String playerName) {
+    private void addPlayer(String playerId, String playerName, int initialStack) {
       if (state.getPlayers().size() >= maxPlayers) {
         throw new IllegalStateException("牌桌人数已满");
       }
       int nextSeat = state.getPlayers().size() + 1;
-      PlayerState joinedPlayer = new PlayerState(playerId, playerName, nextSeat, 1000);
+      PlayerState joinedPlayer = new PlayerState(playerId, playerName, nextSeat, initialStack);
       boolean waiting = true;
       joinedPlayer.setWaitingForNextHand(waiting);
       joinedPlayer.setInHand(!waiting);
@@ -178,6 +217,9 @@ public class TableEngineService {
           .orElseThrow(() -> new IllegalStateException("玩家不存在"));
       if (player.getSeat() != 1) {
         throw new IllegalStateException("仅房主可开始牌局");
+      }
+      if (state.isPracticeMode() && state.getPracticeOutcome() != null && !state.getPracticeOutcome().isBlank()) {
+        throw new IllegalStateException("请先确认练习结果");
       }
       if (countPlayersWithChips() < 2) {
         throw new IllegalStateException("人数不足 2 人，无法开始");
@@ -471,6 +513,64 @@ public class TableEngineService {
       state.getPlayers().forEach(player -> player.setBetThisRound(0));
       state.setSidePots(List.of());
       state.setStage(TableStage.FINISHED);
+      if (state.isPracticeMode()) {
+        applyPracticePostHandRules();
+      }
+    }
+
+    private void applyPracticePostHandRules() {
+      state.getPlayers().removeIf(player ->
+          BotOrchestratorService.isBotPlayerId(player.getPlayerId()) && player.getStack() <= 0
+      );
+
+      PlayerState human = findHumanPlayer();
+      if (human == null || human.getStack() <= 0) {
+        state.setPracticeOutcome("LOSE");
+        return;
+      }
+      boolean anyBotRemaining = state.getPlayers().stream()
+          .anyMatch(player -> BotOrchestratorService.isBotPlayerId(player.getPlayerId()) && player.getStack() > 0);
+      if (!anyBotRemaining) {
+        state.setPracticeOutcome("WIN");
+      }
+    }
+
+    private PlayerState findHumanPlayer() {
+      return state.getPlayers().stream()
+          .filter(player -> !BotOrchestratorService.isBotPlayerId(player.getPlayerId()))
+          .findFirst()
+          .orElse(null);
+    }
+
+    private void acknowledgePracticeOutcome(String playerId, List<String> botNames) {
+      if (!state.isPracticeMode()) {
+        throw new IllegalStateException("非人机练习桌");
+      }
+      if (state.getPracticeOutcome() == null || state.getPracticeOutcome().isBlank()) {
+        throw new IllegalStateException("当前无需确认练习结果");
+      }
+      PlayerState host = state.getPlayers().stream()
+          .filter(candidate -> candidate.getPlayerId().equals(playerId))
+          .findFirst()
+          .orElseThrow(() -> new IllegalStateException("玩家不存在"));
+      if (host.getSeat() != 1) {
+        throw new IllegalStateException("仅房主可确认");
+      }
+      String humanId = host.getPlayerId();
+      String humanName = host.getPlayerName();
+      state.getPlayers().clear();
+      state.setPracticeOutcome(null);
+      state.setStarted(false);
+      dealerCursor = -1;
+      addPlayer(humanId, humanName, PRACTICE_HUMAN_STACK);
+      for (int botIndex = 1; botIndex <= PRACTICE_BOT_COUNT; botIndex++) {
+        String botName = botIndex <= botNames.size() ? botNames.get(botIndex - 1) : "Bot-" + botIndex;
+        addPlayer(
+            BotOrchestratorService.BOT_PLAYER_ID_PREFIX + botIndex,
+            botName,
+            PRACTICE_BOT_STACK
+        );
+      }
     }
 
     private boolean isBeforePreflopFirstAction() {

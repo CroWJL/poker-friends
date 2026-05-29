@@ -24,38 +24,19 @@ interface OpponentPosition {
   variant?: "side";
 }
 
-function getOpponentLayout(count: number) {
-  if (count <= 0) {
-    return [];
-  }
-  const slots = Math.min(count, 7);
-  if (slots === 7) {
-    return [
-      { top: "85%", left: "20%" },
-      { top: "46%", left: "6%", variant: "side" },
-      { top: "8%", left: "20%" },
-      { top: "5%", left: "50%" },
-      { top: "8%", left: "80%" },
-      { top: "46%", left: "94%", variant: "side" },
-      { top: "85%", left: "80%" }
-    ] as OpponentPosition[];
-  }
-  const startAngleDeg = 200;
-  const endAngleDeg = 340;
-  const centerLeft = 50;
-  const centerTop = 46;
-  const radiusX = 38;
-  const radiusY = 34;
-  const step = slots === 1 ? 0 : (endAngleDeg - startAngleDeg) / (slots - 1);
-  return Array.from({ length: slots }, (_, index): OpponentPosition => {
-    const angle = ((startAngleDeg + step * index) * Math.PI) / 180;
-    const left = centerLeft + radiusX * Math.cos(angle);
-    const top = centerTop + radiusY * Math.sin(angle);
-    return {
-      top: `${top.toFixed(1)}%`,
-      left: `${left.toFixed(1)}%`
-    };
-  });
+// 8 人桌固定座位坐标（seat 1 为底部真人位，seat 2–8 为对手）
+const EIGHT_MAX_SEAT_LAYOUT: Record<number, OpponentPosition> = {
+  2: { top: "85%", left: "20%" },
+  3: { top: "46%", left: "6%", variant: "side" },
+  4: { top: "8%", left: "20%" },
+  5: { top: "5%", left: "50%" },
+  6: { top: "8%", left: "80%" },
+  7: { top: "46%", left: "94%", variant: "side" },
+  8: { top: "85%", left: "80%" }
+};
+
+function getPositionForSeat(seat: number): OpponentPosition {
+  return EIGHT_MAX_SEAT_LAYOUT[seat] ?? { top: "30%", left: "50%" };
 }
 
 function renderCards(
@@ -106,18 +87,9 @@ export function PlayerSeats({
   const orderedPlayers = [...players].sort((left, right) => left.seat - right.seat);
   const selfPlayer = orderedPlayers.find((player) => player.playerId === selfPlayerId) ?? orderedPlayers.at(-1);
   const selfSeat = selfPlayer?.seat;
-  const maxSeat = orderedPlayers.at(-1)?.seat ?? 0;
-  const seatDistance = (seat: number) => {
-    if (selfSeat == null || maxSeat <= 0) {
-      return 0;
-    }
-    return seat > selfSeat ? seat - selfSeat : seat + maxSeat - selfSeat;
-  };
-  const opponents =
-    selfSeat == null
-      ? orderedPlayers.filter((player) => player.playerId !== selfPlayer?.playerId)
-      : orderedPlayers.filter((player) => player.seat !== selfSeat).sort((left, right) => seatDistance(left.seat) - seatDistance(right.seat));
-  const opponentPositions = getOpponentLayout(opponents.length);
+  const opponents = orderedPlayers
+    .filter((player) => player.playerId !== selfPlayer?.playerId && player.seat !== selfSeat)
+    .sort((left, right) => left.seat - right.seat);
   const centerCards = Array.from({ length: 5 }, (_, index) => communityCards[index] ?? "??");
   const getRoleTags = (playerId: string) => {
     const tags: Array<{ key: string; label: string; tone: "dealer" | "small-blind" | "big-blind" }> = [];
@@ -156,8 +128,8 @@ export function PlayerSeats({
           </div>
         </div>
 
-        {opponents.map((player, index) => {
-          const position = opponentPositions[index] ?? { top: "30%", left: "50%" };
+        {opponents.map((player) => {
+          const position = getPositionForSeat(player.seat);
           const isSideSeat = position.variant === "side";
           return (
             <div

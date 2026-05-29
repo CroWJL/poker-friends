@@ -14,6 +14,8 @@ public class TableState {
   private int actionsInStage;
   private int playersToAct;
   private boolean started;
+  private boolean practiceMode;
+  private String practiceOutcome;
   private String dealerPlayerId;
   private String smallBlindPlayerId;
   private String bigBlindPlayerId;
@@ -34,6 +36,8 @@ public class TableState {
     this.actionsInStage = 0;
     this.playersToAct = 0;
     this.started = false;
+    this.practiceMode = false;
+    this.practiceOutcome = null;
     this.dealerPlayerId = null;
     this.smallBlindPlayerId = null;
     this.bigBlindPlayerId = null;
@@ -118,6 +122,22 @@ public class TableState {
 
   public void setStarted(boolean started) {
     this.started = started;
+  }
+
+  public boolean isPracticeMode() {
+    return practiceMode;
+  }
+
+  public void setPracticeMode(boolean practiceMode) {
+    this.practiceMode = practiceMode;
+  }
+
+  public String getPracticeOutcome() {
+    return practiceOutcome;
+  }
+
+  public void setPracticeOutcome(String practiceOutcome) {
+    this.practiceOutcome = practiceOutcome;
   }
 
   public String getDealerPlayerId() {

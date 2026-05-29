@@ -25,7 +25,7 @@ export interface ActionCommand {
 }
 
 export interface WsClientMessage {
-  event: "ACTION" | "PING" | "START_GAME";
+  event: "ACTION" | "PING" | "START_GAME" | "PRACTICE_ACK";
   payload?: ActionCommand;
 }
 
@@ -46,11 +46,15 @@ export interface SidePotView {
   eligiblePlayerIds: string[];
 }
 
+export type PracticeOutcome = "WIN" | "LOSE";
+
 export interface TableSnapshot {
   tableId: string;
   handId: string;
   stage: "WAITING" | "PREFLOP" | "FLOP" | "TURN" | "RIVER" | "SHOWDOWN" | "FINISHED";
   started: boolean;
+  practiceMode?: boolean;
+  practiceOutcome?: PracticeOutcome | null;
   pot: number;
   currentBet: number;
   actionPlayerId?: string;

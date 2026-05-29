@@ -10,6 +10,7 @@ import com.pokerfriends.server.model.TableStage;
 import com.pokerfriends.server.model.TableState;
 import com.pokerfriends.server.service.AuthTokenService;
 import com.pokerfriends.server.service.ActionEventLogService;
+import com.pokerfriends.server.service.BotOrchestratorService;
 import com.pokerfriends.server.service.RoomService;
 import com.pokerfriends.server.service.TableEngineService;
 import com.pokerfriends.server.service.TableStateMetaService;
@@ -40,6 +41,7 @@ public class TableWebSocketHandler extends TextWebSocketHandler {
   private final TableStateMetaService tableStateMetaService;
   private final TableStateSnapshotService tableStateSnapshotService;
   private final ActionEventLogService actionEventLogService;
+  private final BotOrchestratorService botOrchestratorService;
   private final Map<String, Map<String, WebSocketSession>> tableSessions = new ConcurrentHashMap<>();
   private final ScheduledExecutorService settlementScheduler = Executors.newSingleThreadScheduledExecutor();
 
@@ -50,7 +52,8 @@ public class TableWebSocketHandler extends TextWebSocketHandler {
       TableEngineService tableEngineService,
       TableStateMetaService tableStateMetaService,
       TableStateSnapshotService tableStateSnapshotService,
-      ActionEventLogService actionEventLogService
+      ActionEventLogService actionEventLogService,
+      BotOrchestratorService botOrchestratorService
   ) {
     this.objectMapper = objectMapper;
     this.authTokenService = authTokenService;
@@ -59,6 +62,7 @@ public class TableWebSocketHandler extends TextWebSocketHandler {
     this.tableStateMetaService = tableStateMetaService;
     this.tableStateSnapshotService = tableStateSnapshotService;
     this.actionEventLogService = actionEventLogService;
+    this.botOrchestratorService = botOrchestratorService;
   }
 
   @Override
@@ -83,7 +87,7 @@ public class TableWebSocketHandler extends TextWebSocketHandler {
       tableStateSnapshotService.upsert(snapshotState);
       sendSnapshotToSession(session, snapshotState);
       broadcastTableSnapshot(tableId, snapshotState, session);
-      scheduleAutoStartIfNeeded(tableId, snapshotState);
+      publishTableState(tableId, snapshotState, session);
     } catch (Exception ex) {
       session.sendMessage(json(new WsEnvelope("ERROR", Map.of("message", ex.getMessage()))));
       session.close(CloseStatus.SERVER_ERROR);
@@ -101,13 +105,20 @@ public class TableWebSocketHandler extends TextWebSocketHandler {
       return;
     }
 
+    if ("PRACTICE_ACK".equals(envelope.event())) {
+      try {
+        TableState snapshot = tableEngineService.acknowledgePracticeOutcome(tableId, playerId).join();
+        publishTableState(tableId, snapshot, null);
+      } catch (Exception ex) {
+        session.sendMessage(json(new WsEnvelope("ERROR", Map.of("message", rootMessage(ex)))));
+      }
+      return;
+    }
+
     if ("START_GAME".equals(envelope.event())) {
       try {
         TableState snapshot = tableEngineService.startGame(tableId, playerId).join();
-        tableStateMetaService.upsert(snapshot);
-        tableStateSnapshotService.upsert(snapshot);
-        broadcastTableSnapshot(tableId, snapshot, null);
-        scheduleAutoStartIfNeeded(tableId, snapshot);
+        publishTableState(tableId, snapshot, null);
       } catch (Exception ex) {
         session.sendMessage(json(new WsEnvelope("ERROR", Map.of("message", rootMessage(ex)))));
       }
@@ -122,23 +133,9 @@ public class TableWebSocketHandler extends TextWebSocketHandler {
     try {
       ActionCommand command = objectMapper.convertValue(envelope.payload(), ActionCommand.class);
       tableEngineService.submitAction(tableId, playerId, command).thenAccept(snapshot -> {
-        tableStateMetaService.upsert(snapshot);
-        tableStateSnapshotService.upsert(snapshot);
         actionEventLogService.recordAccepted(tableId, playerId, command, snapshot);
-        String actorName = snapshot.getPlayers().stream()
-            .filter(player -> player.getPlayerId().equals(playerId))
-            .map(PlayerState::getPlayerName)
-            .findFirst()
-            .orElse(playerId);
-        Map<String, Object> actionPayload = new HashMap<>();
-        actionPayload.put("eventId", UUID.randomUUID().toString());
-        actionPayload.put("playerId", playerId);
-        actionPayload.put("playerName", actorName);
-        actionPayload.put("actionType", command.type().name());
-        actionPayload.put("amount", command.amount());
-        broadcastEnvelope(tableId, new WsEnvelope("ACTION_EVENT", actionPayload));
-        broadcastTableSnapshot(tableId, snapshot, null);
-        scheduleAutoStartIfNeeded(tableId, snapshot);
+        broadcastActionEvent(tableId, playerId, command, snapshot);
+        publishTableState(tableId, snapshot, null);
       }).join();
       session.sendMessage(json(new WsEnvelope("ACTION_RESULT", Map.of("accepted", true))));
     } catch (Exception ex) {
@@ -218,6 +215,8 @@ public class TableWebSocketHandler extends TextWebSocketHandler {
     masked.setActionsInStage(fullSnapshot.getActionsInStage());
     masked.setPlayersToAct(fullSnapshot.getPlayersToAct());
     masked.setStarted(fullSnapshot.isStarted());
+    masked.setPracticeMode(fullSnapshot.isPracticeMode());
+    masked.setPracticeOutcome(fullSnapshot.getPracticeOutcome());
     masked.setDealerPlayerId(fullSnapshot.getDealerPlayerId());
     masked.setSmallBlindPlayerId(fullSnapshot.getSmallBlindPlayerId());
     masked.setBigBlindPlayerId(fullSnapshot.getBigBlindPlayerId());
@@ -295,7 +294,44 @@ public class TableWebSocketHandler extends TextWebSocketHandler {
     return current.getMessage() == null ? "未知错误" : current.getMessage();
   }
 
+  private void publishTableState(String tableId, TableState snapshot, WebSocketSession skipSession) {
+    tableStateMetaService.upsert(snapshot);
+    tableStateSnapshotService.upsert(snapshot);
+    broadcastTableSnapshot(tableId, snapshot, skipSession);
+    scheduleAutoStartIfNeeded(tableId, snapshot);
+    botOrchestratorService.scheduleBotTurnIfNeeded(tableId, snapshot, result ->
+        handleBotAction(result.tableId(), result.botPlayerId(), result.command(), result.snapshot())
+    );
+  }
+
+  private void handleBotAction(String tableId, String botPlayerId, ActionCommand command, TableState snapshot) {
+    actionEventLogService.recordAccepted(tableId, botPlayerId, command, snapshot);
+    broadcastActionEvent(tableId, botPlayerId, command, snapshot);
+    publishTableState(tableId, snapshot, null);
+  }
+
+  private void broadcastActionEvent(String tableId, String playerId, ActionCommand command, TableState snapshot) {
+    String actorName = snapshot.getPlayers().stream()
+        .filter(player -> player.getPlayerId().equals(playerId))
+        .map(PlayerState::getPlayerName)
+        .findFirst()
+        .orElse(playerId);
+    Map<String, Object> actionPayload = new HashMap<>();
+    actionPayload.put("eventId", UUID.randomUUID().toString());
+    actionPayload.put("playerId", playerId);
+    actionPayload.put("playerName", actorName);
+    actionPayload.put("actionType", command.type().name());
+    actionPayload.put("amount", command.amount());
+    broadcastEnvelope(tableId, new WsEnvelope("ACTION_EVENT", actionPayload));
+  }
+
   private void scheduleAutoStartIfNeeded(String tableId, TableState snapshot) {
+    if (snapshot.isPracticeMode()) {
+      return;
+    }
+    if (snapshot.getPracticeOutcome() != null && !snapshot.getPracticeOutcome().isBlank()) {
+      return;
+    }
     if (snapshot.getStage() != TableStage.FINISHED || !snapshot.isStarted()) {
       return;
     }
@@ -303,6 +339,9 @@ public class TableWebSocketHandler extends TextWebSocketHandler {
       try {
         TableState current = tableEngineService.getSnapshot(tableId);
         if (current.getStage() != TableStage.FINISHED || !current.isStarted()) {
+          return;
+        }
+        if (current.getPracticeOutcome() != null && !current.getPracticeOutcome().isBlank()) {
           return;
         }
         String hostPlayerId = current.getPlayers().stream()
@@ -314,9 +353,7 @@ public class TableWebSocketHandler extends TextWebSocketHandler {
           return;
         }
         TableState next = tableEngineService.startGame(tableId, hostPlayerId).join();
-        tableStateMetaService.upsert(next);
-        tableStateSnapshotService.upsert(next);
-        broadcastTableSnapshot(tableId, next, null);
+        publishTableState(tableId, next, null);
       } catch (Exception ignored) {
       }
     }, 3, TimeUnit.SECONDS);

@@ -11,14 +11,27 @@ interface SettlementOverlayProps {
   awards: PotAward[];
   resolvePlayerName: (playerId: string) => string;
   countdownSeconds: number;
+  nextHandHint?: string;
+  requireConfirm?: boolean;
+  onConfirm?: () => void;
 }
 
-export function SettlementOverlay({ awards, resolvePlayerName, countdownSeconds }: SettlementOverlayProps) {
+export function SettlementOverlay({
+  awards,
+  resolvePlayerName,
+  countdownSeconds,
+  nextHandHint,
+  requireConfirm = false,
+  onConfirm
+}: SettlementOverlayProps) {
+  const subtitle = requireConfirm
+    ? "点击确认开始下一局"
+    : (nextHandHint ?? `${countdownSeconds} 秒后开始下一局`);
   return (
     <div className="pf-settlement-mask" role="dialog" aria-modal="true">
       <div className="pf-settlement-card">
         <h3>本局结算</h3>
-        <p className="pf-settlement-subtitle">{countdownSeconds} 秒后开始下一局</p>
+        <p className="pf-settlement-subtitle">{subtitle}</p>
         <ul className="pf-settlement-list">
           {awards.map((award) => (
             <li key={`${award.playerId}-${award.amount}`}>
@@ -37,6 +50,11 @@ export function SettlementOverlay({ awards, resolvePlayerName, countdownSeconds 
             </li>
           ))}
         </ul>
+        {requireConfirm ? (
+          <button type="button" className="pf-settlement-confirm-btn" onClick={onConfirm}>
+            确认
+          </button>
+        ) : null}
       </div>
     </div>
   );

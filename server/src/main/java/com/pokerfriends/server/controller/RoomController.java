@@ -1,6 +1,7 @@
 package com.pokerfriends.server.controller;
 
 import com.pokerfriends.server.dto.ActionEventResponse;
+import com.pokerfriends.server.dto.CreatePracticeRoomRequest;
 import com.pokerfriends.server.dto.CreateRoomRequest;
 import com.pokerfriends.server.dto.JoinRoomRequest;
 import com.pokerfriends.server.dto.RoomOverviewResponse;
@@ -42,6 +43,15 @@ public class RoomController {
   public RoomResponse createRoom(@Valid @RequestBody CreateRoomRequest request) {
     try {
       return roomService.createRoom(request);
+    } catch (IllegalArgumentException ex) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+  }
+
+  @PostMapping("/practice")
+  public RoomResponse createPracticeRoom(@Valid @RequestBody CreatePracticeRoomRequest request) {
+    try {
+      return roomService.createPracticeRoom(request);
     } catch (IllegalArgumentException ex) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage());
     }

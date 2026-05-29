@@ -1,5 +1,6 @@
 package com.pokerfriends.server.service;
 
+import com.pokerfriends.server.dto.CreatePracticeRoomRequest;
 import com.pokerfriends.server.dto.CreateRoomRequest;
 import com.pokerfriends.server.dto.RoomResponse;
 import com.pokerfriends.server.persistence.RoomEntity;
@@ -12,10 +13,15 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import java.security.SecureRandom;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 public class RoomService {
+  private static final int PRACTICE_MAX_PLAYERS = 8;
+  private static final int PRACTICE_SMALL_BLIND = 10;
+  private static final int PRACTICE_BIG_BLIND = 20;
+
   private final SecureRandom secureRandom = new SecureRandom();
   private final AtomicInteger playerCounter = new AtomicInteger(1);
   private final RoomRepository roomRepository;
@@ -70,6 +76,48 @@ public class RoomService {
       } catch (DataIntegrityViolationException duplicate) {
         if (isRoomIdentityConflict(duplicate)) {
           // roomId/tableId 唯一索引冲突，重试生成新的房间号。
+          continue;
+        }
+        throw duplicate;
+      }
+    }
+    throw new IllegalStateException("无法生成唯一房间号");
+  }
+
+  public RoomResponse createPracticeRoom(CreatePracticeRoomRequest request) {
+    UserEntity user = userService.requireByDisplayName(request.hostName());
+    for (int i = 0; i < 10; i++) {
+      String roomId = randomRoomId();
+      String tableId = "table-" + roomId;
+      try {
+        RoomEntity room = roomRepository.save(new RoomEntity(
+            roomId,
+            tableId,
+            PRACTICE_SMALL_BLIND,
+            PRACTICE_BIG_BLIND,
+            PRACTICE_MAX_PLAYERS,
+            RoomStatus.FULL
+        ));
+        String playerId = nextPlayerId();
+        tableEngineService.initPracticeTable(tableId, PRACTICE_SMALL_BLIND, PRACTICE_BIG_BLIND, PRACTICE_MAX_PLAYERS);
+        tableEngineService.addPlayer(tableId, playerId, user.getDisplayName(), TableEngineService.PRACTICE_HUMAN_STACK);
+        List<String> botNames = tableEngineService.randomPracticeBotNames();
+        for (int botIndex = 1; botIndex <= TableEngineService.PRACTICE_BOT_COUNT; botIndex++) {
+          String botName = botIndex <= botNames.size() ? botNames.get(botIndex - 1) : "Bot-" + botIndex;
+          tableEngineService.addPlayer(
+              tableId,
+              BotOrchestratorService.BOT_PLAYER_ID_PREFIX + botIndex,
+              botName,
+              TableEngineService.PRACTICE_BOT_STACK
+          );
+        }
+        var snapshot = tableEngineService.getSnapshot(tableId);
+        tableStateMetaService.upsert(snapshot);
+        tableStateSnapshotService.upsert(snapshot);
+        roomPlayerRepository.save(new RoomPlayerEntity(roomId, user.getUserId(), playerId));
+        return new RoomResponse(roomId, tableId, playerId, authTokenService.issueToken(tableId, playerId));
+      } catch (DataIntegrityViolationException duplicate) {
+        if (isRoomIdentityConflict(duplicate)) {
           continue;
         }
         throw duplicate;

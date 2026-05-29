@@ -4,6 +4,7 @@ import {
   PokerWsClient,
   usePokerStore,
   type ActionCommand,
+  type PracticeOutcome,
   type TableSnapshot,
   type WsServerMessage
 } from "@poker-friends/game-client";
@@ -12,6 +13,7 @@ import { ActionPanel } from "./components/ActionPanel";
 import { ConnectionBanner } from "./components/ConnectionBanner";
 import { EventFeed } from "./components/EventFeed";
 import { PlayerSeats } from "./components/PlayerSeats";
+import { PracticeResultOverlay } from "./components/PracticeResultOverlay";
 import { SettlementOverlay } from "./components/SettlementOverlay";
 import "./poker-theme.css";
 
@@ -155,10 +157,15 @@ export function PokerApp({ platform, config }: PokerAppProps) {
           }>;
           potAwards?: Array<{ playerId: string; amount: number; bestFiveCards?: string[]; handType?: string }>;
         };
-        setSnapshot(message.payload as never);
+        const fullSnapshot = message.payload as TableSnapshot;
+        setSnapshot(fullSnapshot as never);
         setActionPending(false);
         setStartPending(false);
         setError(undefined);
+        if (fullSnapshot.practiceOutcome) {
+          setSettlementAwards([]);
+          setSettlementCountdown(0);
+        }
         if (nextSnapshot.stage && previousStageRef.current !== nextSnapshot.stage) {
           pushFeed(`阶段进入：${formatStageLabel(nextSnapshot.stage)}`);
           if (previousStageRef.current && previousStageRef.current !== nextSnapshot.stage) {
@@ -182,7 +189,9 @@ export function PokerApp({ platform, config }: PokerAppProps) {
           });
           if (lastSettlementDisplayKeyRef.current !== settlementFeedKey) {
             setSettlementAwards(nextSnapshot.potAwards);
-            setSettlementCountdown(3);
+            if (!fullSnapshot.practiceMode) {
+              setSettlementCountdown(3);
+            }
             lastSettlementDisplayKeyRef.current = settlementFeedKey;
           }
           if (lastSettlementFeedKeyRef.current !== settlementFeedKey) {
@@ -267,6 +276,37 @@ export function PokerApp({ platform, config }: PokerAppProps) {
   const saveSession = async (session: StoredPokerSession) => {
     applySession(session);
     await platform.setStoredSession(session);
+  };
+
+  const startPracticeGame = async () => {
+    const hostName = playerName.trim();
+    if (!hostName) {
+      setError("请先输入玩家名");
+      return;
+    }
+    try {
+      setError(undefined);
+      await platform.setStoredPlayerName(hostName);
+      const resp = await fetch(`${config.apiBaseUrl}/api/rooms/practice`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hostName })
+      });
+      if (!resp.ok) {
+        const message = await resp.text();
+        throw new Error(message || `人机对战创建失败(${resp.status})`);
+      }
+      const data = (await resp.json()) as RoomResponse;
+      await saveSession({
+        roomId: data.roomId,
+        tableId: data.tableId,
+        playerId: data.playerId,
+        token: data.token
+      });
+      connectWs(data.tableId, data.playerId, data.token);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "人机对战创建失败");
+    }
   };
 
   const createRoom = async () => {
@@ -376,6 +416,13 @@ export function PokerApp({ platform, config }: PokerAppProps) {
     }
   };
 
+  const acknowledgePracticeOutcome = () => {
+    const sent = wsClient.send({ event: "PRACTICE_ACK" });
+    if (!sent) {
+      setError("连接未就绪，确认失败");
+    }
+  };
+
   const startGame = () => {
     if (!snapshot) {
       setError("牌桌状态未就绪");
@@ -457,8 +504,10 @@ export function PokerApp({ platform, config }: PokerAppProps) {
     showToast("已加载 8 人样式预览");
   };
 
+  const practiceMode = Boolean(snapshot?.practiceMode);
+
   useEffect(() => {
-    if (settlementAwards.length === 0) {
+    if (settlementAwards.length === 0 || practiceMode) {
       return;
     }
     if (settlementCountdown <= 0) {
@@ -467,29 +516,60 @@ export function PokerApp({ platform, config }: PokerAppProps) {
     }
     const timer = window.setTimeout(() => setSettlementCountdown((value) => value - 1), 1000);
     return () => window.clearTimeout(timer);
-  }, [settlementAwards, settlementCountdown]);
+  }, [settlementAwards, settlementCountdown, practiceMode]);
+
+  const confirmSettlementAndContinue = () => {
+    setSettlementAwards([]);
+    setSettlementCountdown(0);
+    lastSettlementDisplayKeyRef.current = null;
+    if (snapshot?.practiceOutcome) {
+      return;
+    }
+    startGame();
+  };
 
   const currentActionPlayer =
     snapshot?.players.find((player) => player.playerId === snapshot.actionPlayerId)?.playerName ?? "-";
+  const practiceOutcome = snapshot?.practiceOutcome as PracticeOutcome | null | undefined;
   const waitingForPlayers = snapshot?.stage === "WAITING";
-  const handLocked = snapshot?.stage === "FINISHED" || snapshot?.stage === "SHOWDOWN";
+  const handFinished = snapshot?.stage === "FINISHED";
+  const handLocked =
+    snapshot?.stage === "SHOWDOWN" || Boolean(practiceOutcome) || handFinished;
   const legalActions = deriveLegalActions(snapshot, selfPlayerId);
   const selfPlayer = snapshot?.players.find((player) => player.playerId === selfPlayerId);
   const isHost = selfPlayer?.seat === 1;
   const activePlayerCount = snapshot?.players.filter((player) => player.stack > 0).length ?? 0;
-  const canStartGame = Boolean(waitingForPlayers && isHost && activePlayerCount >= 2 && !startPending);
+  const canStartGame = Boolean(
+    waitingForPlayers && isHost && activePlayerCount >= 2 && !startPending && !practiceOutcome
+  );
   const waitingMessage = activePlayerCount < 2 ? "等待玩家加入" : "等待房主开始";
-  const actionDisabledReason = handLocked ? "结算中，请等待下一手" : waitingForPlayers ? waitingMessage : undefined;
+  const actionDisabledReason = practiceOutcome
+    ? "请先确认练习结果"
+    : handLocked
+      ? "结算中，请等待下一手"
+      : waitingForPlayers
+        ? waitingMessage
+        : undefined;
   const resolvePlayerName = (playerId: string) =>
     snapshot?.players.find((player) => player.playerId === playerId)?.playerName ?? playerId;
   const hasActiveSession = Boolean(token && tableId && selfPlayerId);
   const canCreateRoom = playerName.trim().length > 0;
   const canJoinRoom = playerName.trim().length > 0 && roomId.trim().length > 0;
+  const canStartPractice = playerName.trim().length > 0;
 
   return (
     <main className="pf-app">
-      {settlementAwards.length > 0 ? (
-        <SettlementOverlay awards={settlementAwards} resolvePlayerName={resolvePlayerName} countdownSeconds={settlementCountdown} />
+      {practiceOutcome ? (
+        <PracticeResultOverlay outcome={practiceOutcome} onConfirm={acknowledgePracticeOutcome} />
+      ) : null}
+      {settlementAwards.length > 0 && !practiceOutcome ? (
+        <SettlementOverlay
+          awards={settlementAwards}
+          resolvePlayerName={resolvePlayerName}
+          countdownSeconds={settlementCountdown}
+          requireConfirm={practiceMode}
+          onConfirm={confirmSettlementAndContinue}
+        />
       ) : null}
       <header className="pf-app-header">
         <div className="pf-brand-block">
@@ -522,6 +602,9 @@ export function PokerApp({ platform, config }: PokerAppProps) {
               />
             </div>
             <div className="pf-lobby-actions">
+              <button className="pf-practice-btn" onClick={startPracticeGame} disabled={!canStartPractice}>
+                人机对战
+              </button>
               <button onClick={createRoom} disabled={!canCreateRoom}>
                 创建房间
               </button>
