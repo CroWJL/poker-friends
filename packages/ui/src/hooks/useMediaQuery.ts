@@ -1,5 +1,18 @@
 import { useEffect, useState } from "react";
 
+/** Screen Orientation API 的 lock/unlock 在部分 TS lib 中未声明，运行时仍可能可用。 */
+type LockableScreenOrientation = ScreenOrientation & {
+  lock?: (orientation: "landscape" | "portrait") => Promise<void>;
+  unlock?: () => void;
+};
+
+function getLockableOrientation(): LockableScreenOrientation | undefined {
+  if (typeof screen === "undefined") {
+    return undefined;
+  }
+  return screen.orientation as LockableScreenOrientation;
+}
+
 export function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(() => {
     if (typeof window === "undefined") {
@@ -32,10 +45,10 @@ export function useIsPortrait(): boolean {
 
 export function useLandscapeLock(active: boolean): void {
   useEffect(() => {
-    if (!active || typeof screen === "undefined") {
+    if (!active) {
       return;
     }
-    const orientation = screen.orientation;
+    const orientation = getLockableOrientation();
     if (!orientation?.lock) {
       return;
     }
